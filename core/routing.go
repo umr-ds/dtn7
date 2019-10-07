@@ -87,6 +87,9 @@ func (routingConf RoutingConf) RoutingAlgorithm(c *Core) (ra RoutingAlgorithm, e
 	case "prophet":
 		ra = NewProphet(c, routingConf.ProphetConf)
 
+	case "simbet":
+		ra = NewSimBet(c)
+
 	case "sensor-mule":
 		if algo, algoErr := routingConf.SensorMuleConf.Algorithm.RoutingAlgorithm(c); algoErr != nil {
 			err = algoErr

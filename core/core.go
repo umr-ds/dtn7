@@ -91,6 +91,7 @@ func NewCore(storePath string, nodeId bundle.EndpointID, inspectAllBundles bool,
 		if err := bundle.GetExtensionBlockManager().Register(&bundle.SignatureBlock{}); err != nil {
 			return nil, fmt.Errorf("SignatureBlock registration errored: %v", err)
 		}
+
 	}
 
 	c.stopSyn = make(chan struct{})
