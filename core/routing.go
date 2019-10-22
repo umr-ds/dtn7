@@ -67,6 +67,9 @@ type RoutingConf struct {
 
 	// SensorNetworkMuleConfig contains data to initialize "sensor-mule"
 	SensorMuleConf SensorNetworkMuleConfig `toml:"sensor-mule-conf"`
+
+	// SimBetConf contains data to initialise SimBet
+	SimBetConf SimBetConfig
 }
 
 // RoutingAlgorithm from its configuration.
@@ -88,7 +91,7 @@ func (routingConf RoutingConf) RoutingAlgorithm(c *Core) (ra RoutingAlgorithm, e
 		ra = NewProphet(c, routingConf.ProphetConf)
 
 	case "simbet":
-		ra = NewSimBet(c)
+		ra = NewSimBet(c, routingConf.SimBetConf)
 
 	case "sensor-mule":
 		if algo, algoErr := routingConf.SensorMuleConf.Algorithm.RoutingAlgorithm(c); algoErr != nil {

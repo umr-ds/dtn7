@@ -9,8 +9,18 @@ import (
 	"sync"
 )
 
+type SimBetConfig struct {
+	// Alpha + Beta = 1
+	// Alpha is the weight of SimUtil
+	Alpha float64
+	// Beta is the weight of BetUtil
+	Beta float64
+}
+
 type SimBet struct {
 	c *Core
+	// config contains the values for the tunable parameters
+	config SimBetConfig
 	// dataMutex is a RW-mutex which protects change operations to the algorithm's metadata
 	dataMutex sync.RWMutex
 	// adjacencies is the adjacency-list for nodes connected to this one
@@ -18,14 +28,27 @@ type SimBet struct {
 	adjacencies map[bundle.EndpointID]bool
 	// peerAdjacencies contains other node's adjacency lists, which we have received via an encounter
 	peerAdjacencies map[bundle.EndpointID][]bundle.EndpointID
+	// similarities contains this node's similarity values for all other nodes
+	similarities map[bundle.EndpointID]float64
+	// betweenness is this node's betweenness value
+	betweenness float64
+	// peerSimilarities contains the similarities-lists of all encountered nodes
+	peerSimilarities map[bundle.EndpointID]map[bundle.EndpointID]float64
+	// peerBetweenness contains the betweenness-values of all encountered nodes
+	peerBetweenness map[bundle.EndpointID]float64
 }
 
-func NewSimBet(c *Core) *SimBet {
-	log.Debug("Initialised SimBet routing")
+func NewSimBet(c *Core, config SimBetConfig) *SimBet {
+	log.Debug("Initialising SimBet routing")
 	simBet := SimBet{
-		c:               c,
-		adjacencies:     make(map[bundle.EndpointID]bool),
-		peerAdjacencies: make(map[bundle.EndpointID][]bundle.EndpointID),
+		c:                c,
+		config:           config,
+		adjacencies:      make(map[bundle.EndpointID]bool),
+		peerAdjacencies:  make(map[bundle.EndpointID][]bundle.EndpointID),
+		similarities:     make(map[bundle.EndpointID]float64),
+		betweenness:      0.0,
+		peerSimilarities: make(map[bundle.EndpointID]map[bundle.EndpointID]float64),
+		peerBetweenness:  make(map[bundle.EndpointID]float64),
 	}
 
 	// register our custom metadata-block
@@ -182,6 +205,19 @@ func (simBet *SimBet) sendMetadata(peerId bundle.EndpointID) {
 	log.WithFields(log.Fields{
 		"bundle": metadataBundle,
 	}).Debug("Successfully sent metadata bundle")
+}
+
+func (simBet *SimBet) computeSimUtil(otherNode bundle.EndpointID, destination bundle.EndpointID) float64 {
+	similarity := simBet.similarities[destination]
+	return similarity / (similarity + simBet.peerSimilarities[otherNode][destination])
+}
+
+func (simBet *SimBet) computeBetUtil(otherNode bundle.EndpointID) float64 {
+	return simBet.betweenness / (simBet.betweenness + simBet.peerBetweenness[otherNode])
+}
+
+func (simBet *SimBet) computeSimBetUtil(otherNode bundle.EndpointID, desitnation bundle.EndpointID) float64 {
+	return (simBet.config.Alpha * simBet.computeSimUtil(otherNode, desitnation)) + (simBet.config.Beta * simBet.computeBetUtil(otherNode))
 }
 
 // adjacencyMapToSlice transforms the map-structure which is used to track adjacencies efficiently
