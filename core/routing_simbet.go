@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"github.com/dtn7/cboring"
 	"github.com/dtn7/dtn7-go/bundle"
 	"github.com/dtn7/dtn7-go/cla"
@@ -57,6 +58,10 @@ func NewSimBet(c *Core, config SimBetConfig) *SimBet {
 		// since we already checked if the block type exists, this really shouldn't ever fail...
 		_ = extensionBlockManager.Register(NewAdjacencyBlock(simBet.adjacencies))
 	}
+	if !extensionBlockManager.IsKnown(ExtBlockTypeSimBetSummaryVector) {
+		// since we already checked if the block type exists, this really shouldn't ever fail...
+		_ = extensionBlockManager.Register(NewSimBetSummaryVector(simBet.betweenness, simBet.similarities))
+	}
 
 	return &simBet
 }
@@ -99,6 +104,30 @@ func (simBet *SimBet) NotifyIncoming(bp BundlePack) {
 			"bundle": bp.ID(),
 			"peer":   peerID,
 		}).Debug("Saved peer metadata")
+
+		simBet.updateBetweenness()
+		simBet.updateSimilarity()
+
+		return
+	}
+
+	bndlItem, err := simBet.c.store.QueryId(bndl.ID())
+	if err != nil {
+		log.WithFields(log.Fields{
+			"bundle": bndl.ID(),
+			"error":  err.Error(),
+		}).Warn("Unable to get BundleItem")
+		return
+	}
+
+	bndlItem.Properties["destination"] = bndl.PrimaryBlock.Destination
+
+	if err = simBet.c.store.Update(bndlItem); err != nil {
+		log.WithFields(log.Fields{
+			"bundle": bndl.ID(),
+			"error":  err.Error(),
+		}).Warn("Unable to save BundleItem")
+		return
 	}
 }
 
@@ -141,7 +170,7 @@ func (simBet *SimBet) ReportPeerAppeared(peer cla.Convergence) {
 		"peer": peerID,
 	}).Debug("Peer added to adjacencies")
 
-	simBet.sendMetadata(peerID)
+	simBet.sendAdjacencies(peerID)
 }
 
 func (simBet *SimBet) ReportPeerDisappeared(peer cla.Convergence) {
@@ -172,39 +201,64 @@ func (simBet *SimBet) ReportPeerDisappeared(peer cla.Convergence) {
 }
 
 // sendAdjacencies sends our list of adjacencies to the connected peer
-// TODO: This is very similar to the sendMetadata functions of prophet/dtlsr
-func (simBet *SimBet) sendMetadata(peerId bundle.EndpointID) {
-	bundleBuilder := bundle.Builder()
-	bundleBuilder.Destination(peerId)
-	bundleBuilder.CreationTimestampNow()
-	bundleBuilder.Lifetime("10m")
-	bundleBuilder.BundleCtrlFlags(bundle.MustNotFragmented)
-	// no Payload
-	bundleBuilder.PayloadBlock(byte(1))
-
+func (simBet *SimBet) sendAdjacencies(peerID bundle.EndpointID) {
 	simBet.dataMutex.RLock()
-
-	bundleBuilder.Source(simBet.c.NodeId)
+	source := simBet.c.NodeId
 	metadataBlock := NewAdjacencyBlock(simBet.adjacencies)
-
 	simBet.dataMutex.RUnlock()
 
-	bundleBuilder.Canonical(metadataBlock)
-	metadataBundle, err := bundleBuilder.Build()
+	err := sendMetadataBundle(simBet.c, source, peerID, metadataBlock)
 	if err != nil {
 		log.WithFields(log.Fields{
+			"peer":   peerID,
 			"reason": err.Error(),
-		}).Warn("Unable to build metadata bundle")
-		return
-	} else {
-		log.Debug("Metadata Bundle built")
+		}).Warn("Error sending adjacencies")
 	}
+}
 
-	log.Debug("Sending metadata bundle")
-	simBet.c.SendBundle(&metadataBundle)
-	log.WithFields(log.Fields{
-		"bundle": metadataBundle,
-	}).Debug("Successfully sent metadata bundle")
+func (simBet *SimBet) sendSummaryVector(peerID bundle.EndpointID) {
+	// filter similarities. we only want the values for nodes for which we are actually carrying messages
+	filteredSimilarities := make(map[bundle.EndpointID]float64)
+	pendingBundles, err := simBet.c.store.QueryPending()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"peer":  peerID,
+			"error": err.Error(),
+		}).Warn("Failed to get pending bundles")
+	}
+	nBndl := len(pendingBundles)
+
+	simBet.dataMutex.RLock()
+	for i := 0; i < nBndl; i++ {
+		bndlItem := pendingBundles[i]
+		destination, ok := bndlItem.Properties["destination"].(bundle.EndpointID)
+		if !ok {
+			log.WithFields(log.Fields{
+				"bundle": bndlItem.Id,
+			}).Warn("Unable to get bundle destination")
+			continue
+		}
+		filteredSimilarities[destination] = simBet.similarities[destination]
+	}
+	simBet.dataMutex.RUnlock()
+
+	summaryVector := NewSimBetSummaryVector(simBet.betweenness, filteredSimilarities)
+
+	err = sendMetadataBundle(simBet.c, simBet.c.NodeId, peerID, summaryVector)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"peer":   peerID,
+			"reason": err.Error(),
+		}).Warn("Error sending summary vector")
+	}
+}
+
+func (simBet *SimBet) updateSimilarity() {
+	// TODO: Dummy Implementation
+}
+
+func (simBet *SimBet) updateBetweenness() {
+	// TODO: Dummy Implementation
 }
 
 func (simBet *SimBet) computeSimUtil(otherNode bundle.EndpointID, destination bundle.EndpointID) float64 {
@@ -288,6 +342,94 @@ func (adjacencyBlock *AdjacencyBlock) UnmarshalCbor(r io.Reader) error {
 	}
 
 	*adjacencyBlock = adjacencies
+
+	return nil
+}
+
+const ExtBlockTypeSimBetSummaryVector uint64 = 196
+
+// SimBetSummaryVector contains the node's betweenness and similarity values
+// for all nodes which are recipients of carried bundles
+type SimBetSummaryVector struct {
+	Betweenness  float64
+	Similarities map[bundle.EndpointID]float64
+}
+
+func NewSimBetSummaryVector(betweenness float64, similarities map[bundle.EndpointID]float64) *SimBetSummaryVector {
+	summaryVector := SimBetSummaryVector{
+		Betweenness:  betweenness,
+		Similarities: similarities,
+	}
+	return &summaryVector
+}
+
+func (summaryVector *SimBetSummaryVector) BlockTypeCode() uint64 {
+	return ExtBlockTypeSimBetSummaryVector
+}
+
+func (summaryVector *SimBetSummaryVector) CheckValid() error {
+	return nil
+}
+
+func (summaryVector *SimBetSummaryVector) MarshalCbor(w io.Writer) error {
+	// write struct ''length''
+	if err := cboring.WriteArrayLength(2, w); err != nil {
+		return err
+	}
+
+	// write betweenness
+	if err := cboring.WriteFloat64(summaryVector.Betweenness, w); err != nil {
+		return err
+	}
+
+	if err := cboring.WriteMapPairLength(uint64(len(summaryVector.Similarities)), w); err != nil {
+		return err
+	}
+
+	for peerID, similarity := range summaryVector.Similarities {
+		if err := cboring.Marshal(&peerID, w); err != nil {
+			return err
+		}
+		if err := cboring.WriteFloat64(similarity, w); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (summaryVector *SimBetSummaryVector) UnmarshalCbor(r io.Reader) error {
+	lenStruct, err := cboring.ReadArrayLength(r)
+	if err != nil {
+		return err
+	} else if lenStruct != 2 {
+		return fmt.Errorf("expected 2 fields, got %d", lenStruct)
+	}
+
+	betweenness, err := cboring.ReadFloat64(r)
+	if err != nil {
+		return err
+	}
+	summaryVector.Betweenness = betweenness
+
+	simLen, err := cboring.ReadMapPairLength(r)
+	if err != nil {
+		return err
+	}
+
+	similarities := make(map[bundle.EndpointID]float64, simLen)
+	for ; simLen > 0; simLen-- {
+		peerID := bundle.EndpointID{}
+		if err := cboring.Unmarshal(&peerID, r); err != nil {
+			return err
+		}
+		similarity, err := cboring.ReadFloat64(r)
+		if err != nil {
+			return err
+		}
+		similarities[peerID] = similarity
+	}
+	summaryVector.Similarities = similarities
 
 	return nil
 }
