@@ -96,6 +96,9 @@ func (routingConf RoutingConf) RoutingAlgorithm(c *Core) (ra RoutingAlgorithm, e
 			ra = NewSensorNetworkMuleRouting(algo, sensorNode)
 		}
 
+	case "rapid":
+		ra = NewRapid(c)
+
 	default:
 		err = fmt.Errorf("unknown routing algorithm %s", routingConf.Algorithm)
 	}
