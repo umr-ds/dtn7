@@ -1,11 +1,12 @@
 package core
 
 import (
+	"io"
+
 	"github.com/dtn7/cboring"
 	"github.com/dtn7/dtn7-go/bundle"
 	"github.com/dtn7/dtn7-go/cla"
 	log "github.com/sirupsen/logrus"
-	"io"
 )
 
 type Rapid struct {
@@ -41,7 +42,45 @@ func (rapid *Rapid) ReportFailure(bp BundlePack, sender cla.ConvergenceSender) {
 }
 
 func (rapid *Rapid) ReportPeerAppeared(peer cla.Convergence) {
-	// TODO: Dummy Implementation
+	log.WithFields(log.Fields{
+		"address": peer,
+	}).Debug("RAPID: Peer appeared")
+
+	peerReceiver, ok := peer.(cla.ConvergenceSender)
+	if !ok {
+		log.Debug("RAPID: Peer was not a ConvergenceSender")
+		return
+	}
+
+	peerID := peerReceiver.GetPeerEndpointID()
+
+	log.WithFields(log.Fields{
+		"peer": peerID,
+	}).Debug("RAPID: PeerID discovered")
+
+	// get the IDs of undelivered bundles
+	bundleItems, err := rapid.c.store.QueryPending()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error": err.Error(),
+		}).Warn("Unable to get pending bundles")
+	}
+
+	n := len(bundleItems)
+	bundleIDs := make([]bundle.BundleID, n)
+	for i := 0; i < n; i++ {
+		bundleIDs[i] = bundleItems[i].BId
+	}
+
+	metadataBlock := NewRapidBlock(bundleIDs)
+
+	err = sendMetadataBundle(rapid.c, rapid.c.NodeId, peerID, metadataBlock)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"peer":  peerID,
+			"error": err.Error(),
+		}).Warn("RAPID: Unable to send metadata bundle")
+	}
 }
 
 func (rapid *Rapid) ReportPeerDisappeared(peer cla.Convergence) {
@@ -73,8 +112,8 @@ func (rapidBlock *RapidBlock) MarshalCbor(w io.Writer) error {
 	if err := cboring.WriteArrayLength(uint64(len(*rapidBlock)), w); err != nil {
 		return err
 	}
-
-	for _, bundleID := range *rapidBlock {
+	for i := range *rapidBlock {
+		bundleID := (*rapidBlock)[i]
 		if err := cboring.Marshal(&bundleID, w); err != nil {
 
 		}
