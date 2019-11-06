@@ -69,7 +69,7 @@ endpoint = "[fc23::2]:35037"
 
 # Specify routing algorithm
 [routing]
-# can be either "epidemic", "spray", "binary_sparay", "dtlsr", "prophet"
+# can be either ["epidemic", "spray", "binary_sparay", "dtlsr", "prophet", "context]
 algorithm = "epidemic"
 
 # config for spray routing
