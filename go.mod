@@ -20,6 +20,7 @@ require (
 	github.com/ulikunitz/xz v0.5.6
 	golang.org/x/net v0.0.0-20190724013045-ca1201d0de80 // indirect
 	golang.org/x/sys v0.0.0-20191210023423-ac6580df4449 // indirect
+	gonum.org/v1/gonum v0.6.0
 )
 
 exclude (

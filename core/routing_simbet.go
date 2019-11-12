@@ -6,6 +6,7 @@ import (
 	"github.com/dtn7/dtn7-go/bundle"
 	"github.com/dtn7/dtn7-go/cla"
 	log "github.com/sirupsen/logrus"
+	"gonum.org/v1/gonum/mat"
 	"io"
 	"sync"
 )
@@ -24,6 +25,10 @@ type SimBet struct {
 	config SimBetConfig
 	// dataMutex is a RW-mutex which protects change operations to the algorithm's metadata
 	dataMutex sync.RWMutex
+	// nodeIndex and index Node are a bidirectional mapping EndpointID <-> uint64
+	// when transforming the adjacency lists, this is ued to map EndpointIDs to matrix indices
+	nodeIndex map[bundle.EndpointID]uint64
+	length    uint64
 	// adjacencies is the adjacency-list for nodes connected to this one
 	// uses map instead of slice to ensure uniqueness of elements
 	adjacencies map[bundle.EndpointID]bool
@@ -44,6 +49,8 @@ func NewSimBet(c *Core, config SimBetConfig) *SimBet {
 	simBet := SimBet{
 		c:                c,
 		config:           config,
+		nodeIndex:        map[bundle.EndpointID]uint64{c.NodeId: 0},
+		length:           1,
 		adjacencies:      make(map[bundle.EndpointID]bool),
 		peerAdjacencies:  make(map[bundle.EndpointID][]bundle.EndpointID),
 		similarities:     make(map[bundle.EndpointID]float64),
@@ -96,6 +103,10 @@ func (simBet *SimBet) NotifyIncoming(bp BundlePack) {
 			"adjacencies": adjacencies,
 		}).Debug("Parsed Metadata")
 
+		for i := 0; i < len(adjacencies); i++ {
+			simBet.trackNode(adjacencies[i])
+		}
+
 		simBet.dataMutex.Lock()
 		simBet.peerAdjacencies[peerID] = adjacencies
 		simBet.dataMutex.Unlock()
@@ -131,6 +142,38 @@ func (simBet *SimBet) NotifyIncoming(bp BundlePack) {
 	}
 }
 
+func (simBet *SimBet) Fatal(fields log.Fields, message string) {
+	if fields == nil {
+		log.Fatal(fmt.Sprintf("SimBet: %s", message))
+	} else {
+		log.WithFields(fields).Fatal(fmt.Sprintf("SimBet: %s", message))
+	}
+}
+
+func (simBet *SimBet) Warn(fields log.Fields, message string) {
+	if fields == nil {
+		log.Warn(fmt.Sprintf("SimBet: %s", message))
+	} else {
+		log.WithFields(fields).Warn(fmt.Sprintf("SimBet: %s", message))
+	}
+}
+
+func (simBet *SimBet) Debug(fields log.Fields, message string) {
+	if fields == nil {
+		log.Debug(fmt.Sprintf("SimBet: %s", message))
+	} else {
+		log.WithFields(fields).Debug(fmt.Sprintf("SimBet: %s", message))
+	}
+}
+
+func (simBet *SimBet) Info(fields log.Fields, message string) {
+	if fields == nil {
+		log.Info(fmt.Sprintf("SimBet: %s", message))
+	} else {
+		log.WithFields(fields).Info(fmt.Sprintf("SimBet: %s", message))
+	}
+}
+
 func (simBet *SimBet) DispatchingAllowed(bp BundlePack) bool {
 	// TODO: Dummy Implementation
 	return true
@@ -161,6 +204,8 @@ func (simBet *SimBet) ReportPeerAppeared(peer cla.Convergence) {
 	log.WithFields(log.Fields{
 		"peer": peerID,
 	}).Debug("PeerID discovered")
+
+	simBet.trackNode(peerID)
 
 	simBet.dataMutex.Lock()
 	simBet.adjacencies[peerID] = true
@@ -258,7 +303,75 @@ func (simBet *SimBet) updateSimilarity() {
 }
 
 func (simBet *SimBet) updateBetweenness() {
-	// TODO: Dummy Implementation
+	log.Debug("Building adjacency matrix")
+	// initialise matrix
+	adjacencyMatrix := mat.NewDense(int(simBet.length), int(simBet.length), nil)
+	adjacencyMatrix.Zero()
+
+	simBet.dataMutex.RLock()
+	// add our own adjacencies
+	mapSlice := adjacencyMapToSlice(simBet.adjacencies)
+	row := make([]float64, simBet.length)
+	for i := 0; i < len(mapSlice); i++ {
+		peerID := mapSlice[i]
+		index := simBet.nodeIndex[peerID]
+		row[index] = 1
+	}
+	adjacencyMatrix.SetRow(1, row)
+
+	for rowPeer, adjacencies := range simBet.peerAdjacencies {
+		rowIndex := simBet.nodeIndex[rowPeer]
+		row = make([]float64, simBet.length)
+		for i := 0; i < len(adjacencies); i++ {
+			peerID := adjacencies[i]
+			index := simBet.nodeIndex[peerID]
+			row[index] = 1
+		}
+		adjacencyMatrix.SetRow(int(rowIndex), row)
+	}
+	simBet.dataMutex.RUnlock()
+	log.WithFields(log.Fields{
+		"matrix": adjacencyMatrix,
+	}).Debug("Finished building adjacency matrix")
+
+	var aSquared mat.Dense
+	aSquared.Mul(adjacencyMatrix, adjacencyMatrix)
+	simBet.Debug(log.Fields{
+		"matrix": aSquared,
+	}, "Squared matrix")
+
+	xDim, yDim := aSquared.Dims()
+	ones := make([]float64, xDim * yDim)
+	for i, _ := range ones {
+		ones[i] = 1.0
+	}
+	onesMatrix := mat.NewDense(xDim, yDim, ones)
+
+	var maskMatrix mat.Dense
+	maskMatrix.Sub(onesMatrix, adjacencyMatrix)
+	simBet.Debug(log.Fields{
+		"matrix": maskMatrix,
+	}, "Binary mask matrix")
+
+	// iterate over top right half of matrix
+	// only take those values from aSquared where the maskMatrix has a 1
+	// add all the reciprocals of these values
+	betweenness := 0.0
+	for xIndex := 0; xIndex < xDim; xIndex++ {
+		for yIndex := xIndex + 1; yIndex < yDim; yIndex++ {
+			if maskMatrix.At(xIndex, yIndex) > 0.5 {
+				betweenness += 1 / aSquared.At(xIndex, yIndex)
+			}
+		}
+	}
+
+	simBet.Debug(log.Fields{
+		"betweenness": betweenness,
+	}, "Final betweenness")
+
+	simBet.dataMutex.Lock()
+	simBet.betweenness = betweenness
+	simBet.dataMutex.Unlock()
 }
 
 func (simBet *SimBet) computeSimUtil(otherNode bundle.EndpointID, destination bundle.EndpointID) float64 {
@@ -286,6 +399,31 @@ func adjacencyMapToSlice(adjacencies map[bundle.EndpointID]bool) []bundle.Endpoi
 	}
 
 	return adjSlice
+}
+
+// track node adds a node's id to the nodeIndex-map
+func (simBet *SimBet) trackNode(id bundle.EndpointID) {
+	log.WithFields(log.Fields{
+		"peerID": id,
+	}).Debug("SIMBET: Looking to track node")
+	simBet.dataMutex.Lock()
+	defer simBet.dataMutex.Unlock()
+
+	_, present := simBet.nodeIndex[id]
+	if present {
+		log.WithFields(log.Fields{
+			"peerID": id,
+		}).Debug("SIMBET: Node already tracked")
+		// the node id is already being tracked and we don't need to do anything
+		return
+	}
+
+	simBet.nodeIndex[id] = simBet.length
+	simBet.length++
+
+	log.WithFields(log.Fields{
+		"peerID": id,
+	}).Debug("SIMBET: Node is now being tracked")
 }
 
 const ExtBlockTypeAdjacencyBlock uint64 = 195
