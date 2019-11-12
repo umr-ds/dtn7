@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"github.com/dop251/goja"
 	"github.com/dtn7/dtn7-go/cla"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -17,13 +18,19 @@ type ContextRouting struct {
 	// context is this node's context information.
 	// The map key is the name of information, the value has to be a JSON-encoded string
 	context map[string]string
+	// javascriptVM is the javascript interpreter which executes the context evaluation-code
+	javascriptVM *goja.Runtime
+	// the javascript interpreter is not thread safe, but reinstantiating it might be a bit much of an overhead
+	// so we serialise interpreter access with a semaphore
+	vmSemaphore sync.Mutex
 }
 
 func NewContextRouting(c *Core) *ContextRouting {
 	log.Info("Initialising ContextRouting")
 	contextRouting := ContextRouting{
-		c:       c,
-		context: make(map[string]string),
+		c:            c,
+		context:      make(map[string]string),
+		javascriptVM: goja.New(),
 	}
 
 	log.Info("Initialising Context REST-Interface")
@@ -37,6 +44,11 @@ func NewContextRouting(c *Core) *ContextRouting {
 	}
 	go srv.ListenAndServe()
 	log.Info("Finished initialising Context REST-Interface")
+
+	log.Info("Initialising javascript interpreter")
+	nodeID := c.NodeId.String()
+	contextRouting.javascriptVM.ToValue(nodeID)
+	log.Info("Finished initialising javascript interpreter")
 
 	log.Info("Finished initialising ContextRouting")
 	return &contextRouting
@@ -52,7 +64,14 @@ func (contextRouting *ContextRouting) DispatchingAllowed(bp BundlePack) bool {
 }
 
 func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []cla.ConvergenceSender, delete bool) {
-	// TODO: Dummy Implementation
+	contextRouting.contextSemaphore.RLock()
+	context := contextRouting.context
+	contextRouting.contextSemaphore.RUnlock()
+
+	contextRouting.vmSemaphore.Lock()
+	contextRouting.javascriptVM.ToValue(context)
+	contextRouting.vmSemaphore.Unlock()
+
 	return nil, false
 }
 
