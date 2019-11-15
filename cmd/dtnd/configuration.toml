@@ -91,3 +91,7 @@ beta = 0.25
 # gamma is the prophet ageing factor (default value provided by the PROPHET-paper)
 gamma = 0.98
 ageinterval = "1m"
+
+# config for context routing
+[routing.contextconf]
+scriptpath = "context.js"

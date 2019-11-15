@@ -51,6 +51,8 @@ type RoutingConf struct {
 	DTLSRConf DTLSRConfig
 	// ProphetConf contains data to initialise prophet
 	ProphetConf ProphetConfig
+	// ContextConf contains data to initialise context routing
+	ContextConf ContextConfig
 }
 
 // sendMetadataBundle can be used by routing algorithm to send relevant metadata to peers

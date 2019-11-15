@@ -15,6 +15,12 @@ import (
 	"time"
 )
 
+type ContextConfig struct {
+	// ScriptPath is the path to the file which contains the javascript source for context evaluation
+	// The file content needs to be encoded in utf-8
+	ScriptPath string
+}
+
 type ContextRouting struct {
 	c                *Core
 	contextSemaphore sync.RWMutex
@@ -23,20 +29,16 @@ type ContextRouting struct {
 	context map[string]string
 	// contains peer context data, the keys are nodeIDs, and the values are the same construct as our own context map
 	peerContext map[string]map[string]string
-	// javascriptVM is the javascript interpreter which executes the context evaluation-code
-	javascriptVM *goja.Runtime
-	// the javascript interpreter is not thread safe, but reinstantiating it might be a bit much of an overhead
-	// so we serialise interpreter access with a semaphore
-	vmSemaphore sync.Mutex
+	// javascript is a internal goja representation of the script that will be run for context evaluation
+	javascript *goja.Program
 }
 
-func NewContextRouting(c *Core) *ContextRouting {
+func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 	log.Info("Initialising ContextRouting")
 	contextRouting := ContextRouting{
-		c:            c,
-		context:      make(map[string]string),
-		peerContext:  make(map[string]map[string]string),
-		javascriptVM: goja.New(),
+		c:           c,
+		context:     make(map[string]string),
+		peerContext: make(map[string]map[string]string),
 	}
 
 	log.Info("Initialising Context REST-Interface")
@@ -51,10 +53,24 @@ func NewContextRouting(c *Core) *ContextRouting {
 	go srv.ListenAndServe()
 	log.Info("Finished initialising Context REST-Interface")
 
-	log.Info("Initialising javascript interpreter")
-	nodeID := c.NodeId.String()
-	contextRouting.javascriptVM.ToValue(nodeID)
-	log.Info("Finished initialising javascript interpreter")
+	log.Info("Compiling javascript")
+	dat, err := ioutil.ReadFile(config.ScriptPath)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"path":  config.ScriptPath,
+			"error": err,
+		}).Fatal("Error reading in script file")
+	}
+	text := string(dat)
+	script, err := goja.Compile("context", text, false)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"script": text,
+			"error":  err,
+		}).Fatal("Error parsing javascript")
+	}
+	contextRouting.javascript = script
+	log.Info("Compilation successful")
 
 	// register our custom metadata-block
 	extensionBlockManager := bundle.GetExtensionBlockManager()
@@ -125,15 +141,25 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 		}
 	}
 
+	vm := goja.New()
+
 	contextRouting.contextSemaphore.RLock()
 	context := contextRouting.context
 	peerContext := contextRouting.peerContext
-	contextRouting.contextSemaphore.RUnlock()
+	nodeID := contextRouting.c.NodeId.String()
+	peers := senderNames(contextRouting.c.claManager.Sender())
 
-	contextRouting.vmSemaphore.Lock()
-	contextRouting.javascriptVM.ToValue(context)
-	contextRouting.javascriptVM.ToValue(peerContext)
-	contextRouting.vmSemaphore.Unlock()
+	vm.ToValue(nodeID)
+	vm.ToValue(context)
+	vm.ToValue(peerContext)
+	vm.ToValue(peers)
+	_, err = vm.RunProgram(contextRouting.javascript)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error": err,
+		}).Warn("Error executing javascript")
+	}
+	contextRouting.contextSemaphore.RUnlock()
 
 	return nil, false
 }
@@ -198,6 +224,15 @@ func (contextRouting *ContextRouting) contextUpdateHandler(w http.ResponseWriter
 	log.WithFields(log.Fields{
 		"context": contextRouting.context,
 	}).Debug("CONTEXT_UPDATE: Successfully updated Context")
+}
+
+// senderNames converts a slice of ConvergenceSenders into a slice
+func senderNames(senders []cla.ConvergenceSender) []string {
+	names := make([]string, len(senders))
+	for i := 0; i < len(senders); i++ {
+		names[i] = senders[i].GetPeerEndpointID().String()
+	}
+	return names
 }
 
 const ExtBlockTypeContextBlock uint64 = 35043

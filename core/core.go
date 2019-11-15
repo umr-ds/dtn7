@@ -71,7 +71,7 @@ func NewCore(storePath string, nodeId bundle.EndpointID, inspectAllBundles bool,
 	case "prophet":
 		c.routing = NewProphet(c, routingConf.ProphetConf)
 	case "context":
-		c.routing = NewContextRouting(c)
+		c.routing = NewContextRouting(c, routingConf.ContextConf)
 	default:
 		log.WithFields(log.Fields{
 			"routing_string": routingConf.Algorithm,
