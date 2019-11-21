@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/dop251/goja"
 	"github.com/dtn7/cboring"
 	"github.com/dtn7/dtn7-go/bundle"
@@ -34,14 +35,14 @@ type ContextRouting struct {
 }
 
 func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
-	log.Info("Initialising ContextRouting")
+	log.Info("CONTEXT: Initialising Context Routing")
 	contextRouting := ContextRouting{
 		c:           c,
-		context:     make(map[string]string),
+		context:     map[string]string{"NodeID": c.NodeId.String()},
 		peerContext: make(map[string]map[string]string),
 	}
 
-	log.Info("Initialising Context REST-Interface")
+	contextRouting.Info(nil, "Initialising Context REST-Interface")
 	router := mux.NewRouter()
 	router.HandleFunc("/context/{contextName}", contextRouting.contextUpdateHandler).Methods("POST")
 	srv := &http.Server{
@@ -51,26 +52,26 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 		WriteTimeout: 15 * time.Second,
 	}
 	go srv.ListenAndServe()
-	log.Info("Finished initialising Context REST-Interface")
+	contextRouting.Info(nil, "Finished initialising Context REST-Interface")
 
-	log.Info("Compiling javascript")
+	contextRouting.Info(nil, "Compiling javascript")
 	dat, err := ioutil.ReadFile(config.ScriptPath)
 	if err != nil {
-		log.WithFields(log.Fields{
+		contextRouting.Fatal(log.Fields{
 			"path":  config.ScriptPath,
 			"error": err,
-		}).Fatal("Error reading in script file")
+		}, "Error reading in script file")
 	}
 	text := string(dat)
 	script, err := goja.Compile("context", text, false)
 	if err != nil {
-		log.WithFields(log.Fields{
+		contextRouting.Fatal(log.Fields{
 			"script": text,
 			"error":  err,
-		}).Fatal("Error parsing javascript")
+		}, "Error parsing javascript")
 	}
 	contextRouting.javascript = script
-	log.Info("Compilation successful")
+	contextRouting.Info(nil, "Compilation successful")
 
 	// register our custom metadata-block
 	extensionBlockManager := bundle.GetExtensionBlockManager()
@@ -79,16 +80,48 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 		_ = extensionBlockManager.Register(newContextBlock(contextRouting.context))
 	}
 
-	log.Info("Finished initialising ContextRouting")
+	contextRouting.Info(nil, "Finished Initialisation")
 	return &contextRouting
+}
+
+func (contextRouting *ContextRouting) Fatal(fields log.Fields, message string) {
+	if fields == nil {
+		log.Fatal(fmt.Sprintf("CONTEXT: %s", message))
+	} else {
+		log.WithFields(fields).Fatal(fmt.Sprintf("CONTEXT: %s", message))
+	}
+}
+
+func (contextRouting *ContextRouting) Warn(fields log.Fields, message string) {
+	if fields == nil {
+		log.Warn(fmt.Sprintf("CONTEXT: %s", message))
+	} else {
+		log.WithFields(fields).Warn(fmt.Sprintf("CONTEXT: %s", message))
+	}
+}
+
+func (contextRouting *ContextRouting) Debug(fields log.Fields, message string) {
+	if fields == nil {
+		log.Debug(fmt.Sprintf("CONTEXT: %s", message))
+	} else {
+		log.WithFields(fields).Debug(fmt.Sprintf("CONTEXT: %s", message))
+	}
+}
+
+func (contextRouting *ContextRouting) Info(fields log.Fields, message string) {
+	if fields == nil {
+		log.Info(fmt.Sprintf("CONTEXT: %s", message))
+	} else {
+		log.WithFields(fields).Info(fmt.Sprintf("CONTEXT: %s", message))
+	}
 }
 
 func (contextRouting *ContextRouting) NotifyIncoming(bp BundlePack) {
 	bndl, err := bp.Bundle()
 	if err != nil {
-		log.WithFields(log.Fields{
+		contextRouting.Warn(log.Fields{
 			"error": err.Error(),
-		}).Warn("Couldn't get bundle data")
+		}, "Couldn't get bundle data")
 		return
 	}
 
@@ -101,9 +134,9 @@ func (contextRouting *ContextRouting) NotifyIncoming(bp BundlePack) {
 
 		peerID := bndl.PrimaryBlock.SourceNode
 
-		log.WithFields(log.Fields{
+		contextRouting.Debug(log.Fields{
 			"source": peerID,
-		}).Debug("Received peer context")
+		}, "Received peer context")
 
 		contextBlock := metaDataBlock.Value.(*ContextBlock)
 		peerContext := contextBlock.getContext()
@@ -124,9 +157,9 @@ func (contextRouting *ContextRouting) DispatchingAllowed(bp BundlePack) bool {
 func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []cla.ConvergenceSender, delete bool) {
 	bndl, err := bp.Bundle()
 	if err != nil {
-		log.WithFields(log.Fields{
+		contextRouting.Warn(log.Fields{
 			"error": err.Error(),
-		}).Warn("Couldn't get bundle data")
+		}, "Couldn't get bundle data")
 		return
 	}
 
@@ -142,22 +175,21 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 	}
 
 	vm := goja.New()
+	vm.Set("loggingFunc", loggingFunc)
 
 	contextRouting.contextSemaphore.RLock()
 	context := contextRouting.context
 	peerContext := contextRouting.peerContext
-	nodeID := contextRouting.c.NodeId.String()
 	peers := senderNames(contextRouting.c.claManager.Sender())
 
-	vm.ToValue(nodeID)
-	vm.ToValue(context)
-	vm.ToValue(peerContext)
-	vm.ToValue(peers)
+	vm.Set("context", context)
+	vm.Set("peerContext", peerContext)
+	vm.Set("peers", peers)
 	_, err = vm.RunProgram(contextRouting.javascript)
 	if err != nil {
-		log.WithFields(log.Fields{
+		contextRouting.Warn(log.Fields{
 			"error": err,
-		}).Warn("Error executing javascript")
+		}, "Error executing javascript")
 	}
 	contextRouting.contextSemaphore.RUnlock()
 
@@ -180,20 +212,20 @@ func (contextRouting *ContextRouting) ReportPeerDisappeared(peer cla.Convergence
 // Updates are sent to the /context/{contextName} endpoint via POST.
 // The request body has to be JSON encoded
 func (contextRouting *ContextRouting) contextUpdateHandler(w http.ResponseWriter, r *http.Request) {
-	log.Debug("CONTEXT_UPDATE: Received context update")
+	contextRouting.Debug(nil, "CONTEXT_UPDATE: Received context update")
 	name := mux.Vars(r)["contextName"]
 
 	bodyBinary, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		log.WithFields(log.Fields{
+		contextRouting.Warn(log.Fields{
 			"error": err,
-		}).Warn("CONTEXT_UPDATE: Unable to read request body")
+		}, "Unable to read request body")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err = w.Write([]byte("Internal Server Error"))
 		if err != nil {
-			log.WithFields(log.Fields{
+			contextRouting.Warn(log.Fields{
 				"error": err,
-			}).Warn("CONTEXT_UPDATE: An error occurred, while handling the error...")
+			}, "CONTEXT_UPDATE: An error occurred, while handling the error...")
 		}
 		return
 	}
@@ -202,15 +234,15 @@ func (contextRouting *ContextRouting) contextUpdateHandler(w http.ResponseWriter
 	var parsed json.RawMessage
 	err = json.Unmarshal(bodyBinary, &parsed)
 	if err != nil {
-		log.WithFields(log.Fields{
+		contextRouting.Info(log.Fields{
 			"error": err,
-		}).Info("CONTEXT_UPDATE: Received invalid context update")
+		}, "CONTEXT_UPDATE: Received invalid context update")
 		w.WriteHeader(http.StatusBadRequest)
 		_, err = w.Write([]byte(err.Error()))
 		if err != nil {
-			log.WithFields(log.Fields{
+			contextRouting.Warn(log.Fields{
 				"error": err,
-			}).Warn("CONTEXT_UPDATE: An error occurred, while handling the error...")
+			}, "An error occurred, while handling the error...")
 		}
 		return
 	}
@@ -221,9 +253,9 @@ func (contextRouting *ContextRouting) contextUpdateHandler(w http.ResponseWriter
 	contextRouting.contextSemaphore.Unlock()
 
 	w.WriteHeader(http.StatusAccepted)
-	log.WithFields(log.Fields{
+	contextRouting.Debug(log.Fields{
 		"context": contextRouting.context,
-	}).Debug("CONTEXT_UPDATE: Successfully updated Context")
+	}, "Successfully updated Context")
 }
 
 // senderNames converts a slice of ConvergenceSenders into a slice
@@ -233,6 +265,10 @@ func senderNames(senders []cla.ConvergenceSender) []string {
 		names[i] = senders[i].GetPeerEndpointID().String()
 	}
 	return names
+}
+
+func loggingFunc(message string) {
+	log.Debug(fmt.Sprintf("JAVASCRIPT: %s", message))
 }
 
 const ExtBlockTypeContextBlock uint64 = 35043
