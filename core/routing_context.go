@@ -77,7 +77,7 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 	extensionBlockManager := bundle.GetExtensionBlockManager()
 	if !extensionBlockManager.IsKnown(ExtBlockTypeContextBlock) {
 		// since we already checked if the block type exists, this really shouldn't ever fail...
-		_ = extensionBlockManager.Register(newContextBlock(contextRouting.context))
+		_ = extensionBlockManager.Register(newNodeContextBlock(contextRouting.context))
 	}
 
 	contextRouting.Info(nil, "Finished Initialisation")
@@ -139,10 +139,9 @@ func (contextRouting *ContextRouting) NotifyIncoming(bp BundlePack) {
 		}, "Received peer context")
 
 		contextBlock := metaDataBlock.Value.(*ContextBlock)
-		peerContext := contextBlock.getContext()
 
 		contextRouting.contextSemaphore.Lock()
-		contextRouting.peerContext[peerID.String()] = peerContext
+		contextRouting.peerContext[peerID.String()] = contextBlock.Context
 		contextRouting.contextSemaphore.Unlock()
 
 		return
@@ -312,15 +311,30 @@ func loggingFunc(message string) {
 
 const ExtBlockTypeContextBlock uint64 = 35043
 
-type ContextBlock map[string]string
+const (
+	NodeContext   = iota
+	BundleContext = iota
+)
 
-func newContextBlock(context map[string]string) *ContextBlock {
-	contextBlock := ContextBlock(context)
+type ContextBlock struct {
+	Type    uint64
+	Context map[string]string
+}
+
+func newNodeContextBlock(context map[string]string) *ContextBlock {
+	contextBlock := ContextBlock{
+		Type:    NodeContext,
+		Context: context,
+	}
 	return &contextBlock
 }
 
-func (contextBlock *ContextBlock) getContext() map[string]string {
-	return *contextBlock
+func newBundleContextBlock(context map[string]string) *ContextBlock {
+	contextBlock := ContextBlock{
+		Type:    BundleContext,
+		Context: context,
+	}
+	return &contextBlock
 }
 
 func (contextBlock *ContextBlock) BlockTypeCode() uint64 {
@@ -332,12 +346,22 @@ func (contextBlock *ContextBlock) CheckValid() error {
 }
 
 func (contextBlock *ContextBlock) MarshalCbor(w io.Writer) error {
-	err := cboring.WriteMapPairLength(uint64(len(*contextBlock)), w)
+	err := cboring.WriteArrayLength(2, w)
 	if err != nil {
 		return err
 	}
 
-	for key, value := range *contextBlock {
+	err = cboring.WriteUInt(contextBlock.Type, w)
+	if err != nil {
+		return err
+	}
+
+	err = cboring.WriteMapPairLength(uint64(len(contextBlock.Context)), w)
+	if err != nil {
+		return err
+	}
+
+	for key, value := range contextBlock.Context {
 		err = cboring.WriteTextString(key, w)
 		if err != nil {
 			return err
@@ -353,6 +377,20 @@ func (contextBlock *ContextBlock) MarshalCbor(w io.Writer) error {
 }
 
 func (contextBlock *ContextBlock) UnmarshalCbor(r io.Reader) error {
+	structLength, err := cboring.ReadArrayLength(r)
+	if err != nil {
+		return err
+	} else if structLength != 3 {
+		return fmt.Errorf("expected 2 fields, got %d", structLength)
+	}
+
+	contextType, err := cboring.ReadUInt(r)
+	if err != nil {
+		return err
+	}
+
+	contextBlock.Type = contextType
+
 	length, err := cboring.ReadMapPairLength(r)
 	if err != nil {
 		return err
@@ -374,7 +412,7 @@ func (contextBlock *ContextBlock) UnmarshalCbor(r io.Reader) error {
 		context[key] = value
 	}
 
-	*contextBlock = context
+	contextBlock.Context = context
 
 	return nil
 }
