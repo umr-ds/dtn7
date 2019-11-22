@@ -174,6 +174,7 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 		}
 	}
 
+	contextRouting.Debug(nil, "Initialising Javascript VM")
 	vm := goja.New()
 	vm.Set("loggingFunc", loggingFunc)
 
@@ -185,15 +186,35 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 	vm.Set("context", context)
 	vm.Set("peerContext", peerContext)
 	vm.Set("peers", peers)
-	_, err = vm.RunProgram(contextRouting.javascript)
+	contextRouting.Debug(nil, "Finished VM initialisation")
+	result, err := vm.RunProgram(contextRouting.javascript)
 	if err != nil {
 		contextRouting.Warn(log.Fields{
 			"error": err,
 		}, "Error executing javascript")
+		return
 	}
 	contextRouting.contextSemaphore.RUnlock()
 
-	return nil, false
+	selected := make([]string, len(sender))
+	err = vm.ExportTo(result, &selected)
+	if err != nil {
+		contextRouting.Warn(log.Fields{
+			"error": err,
+		}, "Could not export javascript return to string array")
+		return
+	}
+	contextRouting.Debug(log.Fields{
+		"senders": selected,
+	}, "Javascript returned selection of senders")
+
+	selectedSenders := getSendersWithMatchingIDs(sender, selected)
+
+	contextRouting.Debug(log.Fields{
+		"CLAs": selectedSenders,
+	}, "")
+
+	return selectedSenders, false
 }
 
 func (contextRouting *ContextRouting) ReportFailure(bp BundlePack, sender cla.ConvergenceSender) {
@@ -265,6 +286,24 @@ func senderNames(senders []cla.ConvergenceSender) []string {
 		names[i] = senders[i].GetPeerEndpointID().String()
 	}
 	return names
+}
+
+// getSendersWithMatchingIDs takes the complete list of all senders and returns those with names matching 'selected'
+func getSendersWithMatchingIDs(senders []cla.ConvergenceSender, selected []string) []cla.ConvergenceSender {
+	sendersMap := make(map[string]cla.ConvergenceSender, len(senders))
+	for i := 0; i < len(senders); i++ {
+		name := senders[i].GetPeerEndpointID().String()
+		sendersMap[name] = senders[i]
+	}
+
+	selectedSenders := make([]cla.ConvergenceSender, len(selected))
+	for i := 0; i < len(selected); i++ {
+		if selected[i] != "" {
+			selectedSenders[i] = sendersMap[selected[i]]
+		}
+	}
+
+	return selectedSenders
 }
 
 func loggingFunc(message string) {
