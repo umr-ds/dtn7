@@ -28,19 +28,33 @@ type ContextRouting struct {
 	// context is this node's context information.
 	// The map key is the name of information, the value has to be a JSON-encoded string
 	context map[string]string
+	// contextModified is true is this node has had a context update since the last broadcast, false otherwise
+	contextModified bool
 	// contains peer context data, the keys are nodeIDs, and the values are the same construct as our own context map
 	peerContext map[string]map[string]string
 	// javascript is a internal goja representation of the script that will be run for context evaluation
 	javascript *goja.Program
+	// address that broadcast bundles are sent to
+	broadcastAddress bundle.EndpointID
 }
 
 func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 	log.Info("CONTEXT: Initialising Context Routing")
 	contextRouting := ContextRouting{
-		c:           c,
-		context:     map[string]string{"NodeID": c.NodeId.String()},
-		peerContext: make(map[string]map[string]string),
+		c:               c,
+		context:         map[string]string{"NodeID": c.NodeId.String()},
+		contextModified: false,
+		peerContext:     make(map[string]map[string]string),
 	}
+
+	bAddress, err := bundle.NewEndpointID(BroadcastAddress)
+	if err != nil {
+		contextRouting.Fatal(log.Fields{
+			"BroadcastAddress": BroadcastAddress,
+			"error":            err,
+		}, "Unable to parse broadcast address")
+	}
+	contextRouting.broadcastAddress = bAddress
 
 	contextRouting.Info(nil, "Initialising Context REST-Interface")
 	router := mux.NewRouter()
@@ -165,8 +179,8 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 	// handle context bundles
 	if _, err := bndl.ExtensionBlock(ExtBlockTypeProphetBlock); err == nil {
 		if bndl.PrimaryBlock.SourceNode == contextRouting.c.NodeId {
-			// if we are the originator of this bundle, we forward it to everyone
-			return contextRouting.c.claManager.Sender(), false
+			// if we are the originator of this bundle, we forward it to everyone and then we can directly delete it
+			return contextRouting.c.claManager.Sender(), true
 		} else {
 			// if this is another node's context message, we do not forward it and delete it immediately
 			return nil, true
@@ -221,7 +235,33 @@ func (contextRouting *ContextRouting) ReportFailure(bp BundlePack, sender cla.Co
 }
 
 func (contextRouting *ContextRouting) ReportPeerAppeared(peer cla.Convergence) {
-	// TODO: Dummy Implementation
+	contextRouting.Debug(log.Fields{
+		"address": peer,
+	}, "Peer appeared")
+
+	peerReceiver, ok := peer.(cla.ConvergenceSender)
+	if !ok {
+		contextRouting.Warn(nil, "Peer was not a ConvergenceSender")
+		return
+	}
+
+	peerID := peerReceiver.GetPeerEndpointID()
+
+	contextRouting.Debug(log.Fields{
+		"peer": peerID,
+	}, "PeerID discovered")
+
+	// send the peer our context data
+	contextRouting.contextSemaphore.RLock()
+	contextBlock := newNodeContextBlock(contextRouting.context)
+	contextRouting.contextSemaphore.RUnlock()
+
+	err := sendMetadataBundle(contextRouting.c, contextRouting.c.NodeId, peerID, contextBlock)
+	if err != nil {
+		contextRouting.Warn(log.Fields{
+			"error": err,
+		}, "Unable to send context block")
+	}
 }
 
 func (contextRouting *ContextRouting) ReportPeerDisappeared(peer cla.Convergence) {
@@ -270,12 +310,43 @@ func (contextRouting *ContextRouting) contextUpdateHandler(w http.ResponseWriter
 	body := string(bodyBinary)
 	contextRouting.contextSemaphore.Lock()
 	contextRouting.context[name] = body
+	contextRouting.contextModified = true
 	contextRouting.contextSemaphore.Unlock()
 
 	w.WriteHeader(http.StatusAccepted)
 	contextRouting.Debug(log.Fields{
 		"context": contextRouting.context,
 	}, "Successfully updated Context")
+}
+
+func (contextRouting *ContextRouting) broadcastCron() {
+	contextRouting.Debug(nil, "Running broadcast cron")
+	contextRouting.contextSemaphore.RLock()
+	// do nothing if nothing has changed
+	if !contextRouting.contextModified {
+		contextRouting.contextSemaphore.RUnlock()
+		contextRouting.Debug(nil, "Context not modified, nothing to do")
+		return
+	}
+
+	contextBlock := newNodeContextBlock(contextRouting.context)
+	contextRouting.contextSemaphore.RUnlock()
+
+	contextRouting.Debug(log.Fields{
+		"context": contextBlock,
+	}, "Broadcasting context")
+
+	err := sendMetadataBundle(contextRouting.c, contextRouting.c.NodeId, contextRouting.broadcastAddress, contextBlock)
+	if err != nil {
+		contextRouting.Warn(log.Fields{
+			"error": err,
+		}, "Error sending context broadcast")
+		return
+	}
+
+	contextRouting.contextSemaphore.Lock()
+	contextRouting.contextModified = false
+	contextRouting.contextSemaphore.Unlock()
 }
 
 // senderNames converts a slice of ConvergenceSenders into a slice
