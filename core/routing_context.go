@@ -20,6 +20,8 @@ type ContextConfig struct {
 	// ScriptPath is the path to the file which contains the javascript source for context evaluation
 	// The file content needs to be encoded in utf-8
 	ScriptPath string
+	// ListenAddress if the address to which the context-update REST-interface should bind
+	ListenAddress string
 }
 
 type ContextRouting struct {
@@ -60,7 +62,7 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 	router := mux.NewRouter()
 	router.HandleFunc("/context/{contextName}", contextRouting.contextUpdateHandler).Methods("POST")
 	srv := &http.Server{
-		Addr:         "127.0.0.1:35043",
+		Addr:         config.ListenAddress,
 		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -91,7 +93,7 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 	extensionBlockManager := bundle.GetExtensionBlockManager()
 	if !extensionBlockManager.IsKnown(ExtBlockTypeContextBlock) {
 		// since we already checked if the block type exists, this really shouldn't ever fail...
-		_ = extensionBlockManager.Register(newNodeContextBlock(contextRouting.context))
+		_ = extensionBlockManager.Register(NewNodeContextBlock(contextRouting.context))
 	}
 
 	contextRouting.Info(nil, "Finished Initialisation")
@@ -253,7 +255,7 @@ func (contextRouting *ContextRouting) ReportPeerAppeared(peer cla.Convergence) {
 
 	// send the peer our context data
 	contextRouting.contextSemaphore.RLock()
-	contextBlock := newNodeContextBlock(contextRouting.context)
+	contextBlock := NewNodeContextBlock(contextRouting.context)
 	contextRouting.contextSemaphore.RUnlock()
 
 	err := sendMetadataBundle(contextRouting.c, contextRouting.c.NodeId, peerID, contextBlock)
@@ -272,7 +274,7 @@ func (contextRouting *ContextRouting) ReportPeerDisappeared(peer cla.Convergence
 // Updates are sent to the /context/{contextName} endpoint via POST.
 // The request body has to be JSON encoded
 func (contextRouting *ContextRouting) contextUpdateHandler(w http.ResponseWriter, r *http.Request) {
-	contextRouting.Debug(nil, "CONTEXT_UPDATE: Received context update")
+	contextRouting.Debug(nil, "Received context update")
 	name := mux.Vars(r)["contextName"]
 
 	bodyBinary, err := ioutil.ReadAll(r.Body)
@@ -285,7 +287,7 @@ func (contextRouting *ContextRouting) contextUpdateHandler(w http.ResponseWriter
 		if err != nil {
 			contextRouting.Warn(log.Fields{
 				"error": err,
-			}, "CONTEXT_UPDATE: An error occurred, while handling the error...")
+			}, "An error occurred, while handling the error...")
 		}
 		return
 	}
@@ -296,7 +298,7 @@ func (contextRouting *ContextRouting) contextUpdateHandler(w http.ResponseWriter
 	if err != nil {
 		contextRouting.Info(log.Fields{
 			"error": err,
-		}, "CONTEXT_UPDATE: Received invalid context update")
+		}, "Received invalid context update")
 		w.WriteHeader(http.StatusBadRequest)
 		_, err = w.Write([]byte(err.Error()))
 		if err != nil {
@@ -329,7 +331,7 @@ func (contextRouting *ContextRouting) broadcastCron() {
 		return
 	}
 
-	contextBlock := newNodeContextBlock(contextRouting.context)
+	contextBlock := NewNodeContextBlock(contextRouting.context)
 	contextRouting.contextSemaphore.RUnlock()
 
 	contextRouting.Debug(log.Fields{
@@ -392,7 +394,7 @@ type ContextBlock struct {
 	Context map[string]string
 }
 
-func newNodeContextBlock(context map[string]string) *ContextBlock {
+func NewNodeContextBlock(context map[string]string) *ContextBlock {
 	contextBlock := ContextBlock{
 		Type:    NodeContext,
 		Context: context,
@@ -400,7 +402,7 @@ func newNodeContextBlock(context map[string]string) *ContextBlock {
 	return &contextBlock
 }
 
-func newBundleContextBlock(context map[string]string) *ContextBlock {
+func NewBundleContextBlock(context map[string]string) *ContextBlock {
 	contextBlock := ContextBlock{
 		Type:    BundleContext,
 		Context: context,

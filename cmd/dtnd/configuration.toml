@@ -40,6 +40,9 @@ node = "dtn://alpha/"
 #   $ curl http://localhost:8080/fetch/
 listen = "127.0.0.1:8080"
 
+[context-rest]
+listen = "127.0.0.1:35037"
+
 # Each listen is another convergence layer adapter (CLA). Multiple [[listen]]
 # blocks are usable.
 [[listen]]
@@ -95,3 +98,4 @@ ageinterval = "1m"
 # config for context routing
 [routing.contextconf]
 scriptpath = "context.js"
+listenaddress = "127.0.0.1:35043"

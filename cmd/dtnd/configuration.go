@@ -20,13 +20,14 @@ import (
 
 // tomlConfig describes the TOML-configuration.
 type tomlConfig struct {
-	Core       coreConf
-	Logging    logConf
-	Discovery  discoveryConf
-	SimpleRest simpleRestConf `toml:"simple-rest"`
-	Listen     []convergenceConf
-	Peer       []convergenceConf
-	Routing    core.RoutingConf
+	Core        coreConf
+	Logging     logConf
+	Discovery   discoveryConf
+	SimpleRest  simpleRestConf  `toml:"simple-rest"`
+	ContextRest contextRestConf `toml:"context-rest"`
+	Listen      []convergenceConf
+	Peer        []convergenceConf
+	Routing     core.RoutingConf
 }
 
 // coreConf describes the Core-configuration block.
@@ -53,6 +54,10 @@ type discoveryConf struct {
 // simpleRestConf describes the SimpleRESTAppAgent.
 type simpleRestConf struct {
 	Node   string
+	Listen string
+}
+
+type contextRestConf struct {
 	Listen string
 }
 
@@ -213,6 +218,12 @@ func parseCore(filename string) (c *core.Core, ds *discovery.DiscoveryService, e
 				"error": err,
 			}).Warn("Failed to register SimpleRESTAppAgent")
 		}
+	}
+
+	// ContextRESTAgent
+	if conf.ContextRest != (contextRestConf{}) {
+		agent := core.NewContextAgent(c, conf.ContextRest.Listen)
+		c.RegisterApplicationAgent(agent)
 	}
 
 	// Listen/ConvergenceReceiver
