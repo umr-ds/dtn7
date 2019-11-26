@@ -12,9 +12,9 @@ import (
 )
 
 type sendRequest struct {
-	recipient string
-	context   map[string]string
-	payload   []byte
+	Recipient string
+	Context   map[string]string
+	Payload   []byte
 }
 
 type ContextRESTAgend struct {
@@ -50,33 +50,33 @@ func NewContextAgent(c *Core, address string) *ContextRESTAgend {
 
 func (agent *ContextRESTAgend) Fatal(fields log.Fields, message string) {
 	if fields == nil {
-		log.Fatal(fmt.Sprintf("CONTEXT: %s", message))
+		log.Fatal(fmt.Sprintf("CONTEXTAGENT: %s", message))
 	} else {
-		log.WithFields(fields).Fatal(fmt.Sprintf("CONTEXT: %s", message))
+		log.WithFields(fields).Fatal(fmt.Sprintf("CONTEXTAGENT: %s", message))
 	}
 }
 
 func (agent *ContextRESTAgend) Warn(fields log.Fields, message string) {
 	if fields == nil {
-		log.Warn(fmt.Sprintf("CONTEXT: %s", message))
+		log.Warn(fmt.Sprintf("CONTEXTAGENT: %s", message))
 	} else {
-		log.WithFields(fields).Warn(fmt.Sprintf("CONTEXT: %s", message))
+		log.WithFields(fields).Warn(fmt.Sprintf("CONTEXTAGENT: %s", message))
 	}
 }
 
 func (agent *ContextRESTAgend) Debug(fields log.Fields, message string) {
 	if fields == nil {
-		log.Debug(fmt.Sprintf("CONTEXT: %s", message))
+		log.Debug(fmt.Sprintf("CONTEXTAGENT: %s", message))
 	} else {
-		log.WithFields(fields).Debug(fmt.Sprintf("CONTEXT: %s", message))
+		log.WithFields(fields).Debug(fmt.Sprintf("CONTEXTAGENT: %s", message))
 	}
 }
 
 func (agent *ContextRESTAgend) Info(fields log.Fields, message string) {
 	if fields == nil {
-		log.Info(fmt.Sprintf("CONTEXT: %s", message))
+		log.Info(fmt.Sprintf("CONTEXTAGENT: %s", message))
 	} else {
-		log.WithFields(fields).Info(fmt.Sprintf("CONTEXT: %s", message))
+		log.WithFields(fields).Info(fmt.Sprintf("CONTEXTAGENT: %s", message))
 	}
 }
 
@@ -115,9 +115,13 @@ func (agent *ContextRESTAgend) sendHandler(w http.ResponseWriter, r *http.Reques
 			}, "An error occurred, while handling the error...")
 		}
 		return
+	} else {
+		agent.Debug(log.Fields{
+			"message": message,
+		}, "Decoded message")
 	}
 
-	recipient, err := bundle.NewEndpointID(message.recipient)
+	recipient, err := bundle.NewEndpointID(message.Recipient)
 	if err != nil {
 		agent.Info(log.Fields{
 			"error": err,
@@ -136,10 +140,10 @@ func (agent *ContextRESTAgend) sendHandler(w http.ResponseWriter, r *http.Reques
 	builder.Source(agent.endpointID)
 	builder.Destination(recipient)
 	builder.CreationTimestampNow()
-	builder.Lifetime("60min")
+	builder.Lifetime("60m")
 	builder.BundleCtrlFlags(bundle.MustNotFragmented | bundle.StatusRequestDelivery)
-	builder.PayloadBlock(message.payload)
-	builder.Canonical(NewBundleContextBlock(message.context))
+	builder.PayloadBlock(message.Payload)
+	builder.Canonical(NewBundleContextBlock(message.Context))
 	bndl, err := builder.Build()
 	if err != nil {
 		agent.Info(log.Fields{
