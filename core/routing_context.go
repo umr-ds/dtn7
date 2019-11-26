@@ -141,6 +141,14 @@ func (contextRouting *ContextRouting) NotifyIncoming(bp BundlePack) {
 		return
 	}
 
+	bi, err := contextRouting.c.store.QueryId(bp.Id)
+	if err != nil {
+		contextRouting.Warn(log.Fields{
+			"error": err,
+		}, "Failed to process a non-stored Bundle")
+		return
+	}
+
 	// handle context bundles
 	if metaDataBlock, err := bndl.ExtensionBlock(ExtBlockTypeProphetBlock); err == nil {
 		// if it's from us, do nothing
@@ -148,19 +156,46 @@ func (contextRouting *ContextRouting) NotifyIncoming(bp BundlePack) {
 			return
 		}
 
-		peerID := bndl.PrimaryBlock.SourceNode
-
-		contextRouting.Debug(log.Fields{
-			"source": peerID,
-		}, "Received peer context")
-
 		contextBlock := metaDataBlock.Value.(*ContextBlock)
 
-		contextRouting.contextSemaphore.Lock()
-		contextRouting.peerContext[peerID.String()] = contextBlock.Context
-		contextRouting.contextSemaphore.Unlock()
+		if contextBlock.Type == NodeContext {
+			peerID := bndl.PrimaryBlock.SourceNode
 
-		return
+			contextRouting.Debug(log.Fields{
+				"source": peerID,
+			}, "Received peer context")
+
+			contextRouting.contextSemaphore.Lock()
+			contextRouting.peerContext[peerID.String()] = contextBlock.Context
+			contextRouting.contextSemaphore.Unlock()
+		} else if contextBlock.Type == BundleContext {
+			// store data from primary block
+			bi.Properties["routing/context/primary"] = bndl.PrimaryBlock
+			// store bundle context
+			bi.Properties["routing/context/context"] = contextBlock.Context
+		} else {
+			contextRouting.Warn(nil, "Unknown context block type")
+		}
+	}
+
+	// Check if we got a PreviousNodeBlock and extract its EndpointID
+	var prevNode bundle.EndpointID
+	if pnBlock, err := bndl.ExtensionBlock(bundle.ExtBlockTypePreviousNodeBlock); err == nil {
+		prevNode = pnBlock.Value.(*bundle.PreviousNodeBlock).Endpoint()
+
+		sentEids, ok := bi.Properties["routing/context/sent"].([]bundle.EndpointID)
+		if !ok {
+			sentEids = make([]bundle.EndpointID, 0)
+		}
+
+		bi.Properties["routing/context/sent"] = append(sentEids, prevNode)
+	}
+
+	err = contextRouting.c.store.Update(bi)
+	if err != nil {
+		contextRouting.Warn(log.Fields{
+			"error": err,
+		}, "Failed to store bundle data")
 	}
 }
 
@@ -192,6 +227,22 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 	contextRouting.Debug(nil, "Initialising Javascript VM")
 	vm := goja.New()
 	vm.Set("loggingFunc", loggingFunc)
+
+	// load bundle context
+	bi, err := contextRouting.c.store.QueryId(bp.Id)
+	if err != nil {
+		contextRouting.Warn(log.Fields{
+			"error": err,
+		}, "Failed to process a non-stored Bundle")
+		return
+	}
+
+	bundleContext, ok := bi.Properties["routing/context/context"].(map[string]string)
+	if !ok {
+		contextRouting.Warn(nil, "No context for bundle")
+		bundleContext = make(map[string]string)
+	}
+	vm.Set("bundleContext", bundleContext)
 
 	contextRouting.contextSemaphore.RLock()
 	context := contextRouting.context
