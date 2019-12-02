@@ -5,6 +5,8 @@ import base64
 import json
 import requests
 
+from typing import Any, Dict
+
 
 def load_payload(path: str) -> str:
     """Loads payload from specified file
@@ -20,7 +22,7 @@ def load_payload(path: str) -> str:
         return str(base64.b64encode(contents), encoding="utf-8")
 
 
-def load_context(path: str) -> str:
+def load_context(path: str) -> Dict[str, Any]:
     """Load bundle context from provided file and parse it to check if it is valid JSON
 
     Args:
@@ -32,8 +34,8 @@ def load_context(path: str) -> str:
     with open(path, "r") as f:
         contents: str = f.read()
         # try to parse json to see if it is valid
-        _ = json.loads(contents)
-        return contents
+        decoded = json.loads(contents)
+        return decoded
 
 
 def build_url(address: str, port: int) -> str:
@@ -41,7 +43,10 @@ def build_url(address: str, port: int) -> str:
 
 
 def send_bundle(
-    rest_url: str, bundle_recipient: str, bundle_context: str, bundle_payload: str
+    rest_url: str,
+    bundle_recipient: str,
+    bundle_context: Dict[str, Any],
+    bundle_payload: str,
 ) -> None:
     """Send a bundle via the context-REST agent
 
@@ -61,6 +66,8 @@ def send_bundle(
     )
 
     response: requests.Response = requests.post(f"{rest_url}/send", data=bundle_data)
+    print(f"Status: {response.status_code}")
+    print(response.text)
 
 
 if __name__ == "__main__":
