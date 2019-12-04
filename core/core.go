@@ -43,6 +43,7 @@ func NewCore(storePath string, nodeId bundle.EndpointID, inspectAllBundles bool,
 	gob.Register(bundle.IpnEndpoint{})
 	gob.Register(map[Constraint]bool{})
 	gob.Register(time.Time{})
+	gob.Register(map[string]string{})
 
 	c.cron = NewCron()
 

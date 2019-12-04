@@ -61,6 +61,7 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 	contextRouting.Info(nil, "Initialising Context REST-Interface")
 	router := mux.NewRouter()
 	router.HandleFunc("/context/{contextName}", contextRouting.contextUpdateHandler).Methods("POST")
+
 	srv := &http.Server{
 		Addr:         config.ListenAddress,
 		Handler:      router,
@@ -78,6 +79,7 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 			"error": err,
 		}, "Error reading in script file")
 	}
+
 	text := string(dat)
 	script, err := goja.Compile("context", text, false)
 	if err != nil {
@@ -86,6 +88,7 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 			"error":  err,
 		}, "Error parsing javascript")
 	}
+
 	contextRouting.javascript = script
 	contextRouting.Info(nil, "Compilation successful")
 
@@ -133,6 +136,10 @@ func (contextRouting *ContextRouting) Info(fields log.Fields, message string) {
 }
 
 func (contextRouting *ContextRouting) NotifyIncoming(bp BundlePack) {
+	contextRouting.Debug(log.Fields{
+		"bundle": bp.ID(),
+	}, "Incoming bundle")
+
 	bndl, err := bp.Bundle()
 	if err != nil {
 		contextRouting.Warn(log.Fields{
@@ -149,39 +156,64 @@ func (contextRouting *ContextRouting) NotifyIncoming(bp BundlePack) {
 		return
 	}
 
-	// handle context bundles
-	if metaDataBlock, err := bndl.ExtensionBlock(ExtBlockTypeProphetBlock); err == nil {
-		// if it's from us, do nothing
-		if bndl.PrimaryBlock.SourceNode == contextRouting.c.NodeId {
-			return
-		}
+	metaDataBlock, err := bndl.ExtensionBlock(ExtBlockTypeContextBlock)
+	// handle bundle context
+	if err == nil {
+		contextRouting.Debug(log.Fields{
+			"bundle": bndl.ID(),
+		}, "Bundle has context block")
 
 		contextBlock := metaDataBlock.Value.(*ContextBlock)
 
-		if contextBlock.Type == NodeContext {
-			peerID := bndl.PrimaryBlock.SourceNode
+		if contextBlock.Type == BundleContext {
+			// this is a normal bundle
+			contextRouting.Debug(log.Fields{
+				"bundle": bndl.ID(),
+			}, "Is normal bundle")
+
+			context := contextBlock.Context
 
 			contextRouting.Debug(log.Fields{
-				"source": peerID,
+				"bundle":  bndl.ID(),
+				"context": context,
+			}, "Parsed bundle context")
+
+			bi.Properties["routing/context/context"] = context
+			bi.Properties["routing/context/source"] = bndl.PrimaryBlock.SourceNode.String()
+			bi.Properties["routing/context/destination"] = bndl.PrimaryBlock.SourceNode.String()
+		} else if contextBlock.Type == NodeContext {
+			// this is a context bundle
+			contextRouting.Debug(log.Fields{
+				"bundle": bndl.ID(),
+			}, "Is context bundle")
+
+			// if it's from us, do nothing
+			if bndl.PrimaryBlock.SourceNode == contextRouting.c.NodeId {
+				return
+			}
+
+			peerID := bndl.PrimaryBlock.SourceNode
+			context := contextBlock.Context
+
+			contextRouting.Debug(log.Fields{
+				"source":  peerID,
+				"context": context,
 			}, "Received peer context")
 
 			contextRouting.contextSemaphore.Lock()
-			contextRouting.peerContext[peerID.String()] = contextBlock.Context
+			contextRouting.peerContext[peerID.String()] = context
 			contextRouting.contextSemaphore.Unlock()
-		} else if contextBlock.Type == BundleContext {
-			// store data from primary block
-			bi.Properties["routing/context/primary"] = bndl.PrimaryBlock
-			// store bundle context
-			bi.Properties["routing/context/context"] = contextBlock.Context
 		} else {
-			contextRouting.Warn(nil, "Unknown context block type")
+			contextRouting.Warn(log.Fields{
+				"contextBlock": contextBlock,
+			}, "Unknown contextBlcok-type")
 		}
 	}
 
 	// Check if we got a PreviousNodeBlock and extract its EndpointID
-	var prevNode bundle.EndpointID
-	if pnBlock, err := bndl.ExtensionBlock(bundle.ExtBlockTypePreviousNodeBlock); err == nil {
-		prevNode = pnBlock.Value.(*bundle.PreviousNodeBlock).Endpoint()
+	pnBlock, err := bndl.ExtensionBlock(bundle.ExtBlockTypePreviousNodeBlock)
+	if err == nil {
+		prevNode := pnBlock.Value.(*bundle.PreviousNodeBlock).Endpoint()
 
 		sentEids, ok := bi.Properties["routing/context/sent"].([]bundle.EndpointID)
 		if !ok {
@@ -191,6 +223,10 @@ func (contextRouting *ContextRouting) NotifyIncoming(bp BundlePack) {
 		bi.Properties["routing/context/sent"] = append(sentEids, prevNode)
 	}
 
+	contextRouting.Debug(log.Fields{
+		"bundle":     bndl.ID(),
+		"properties": bi.Properties,
+	}, "Updating bundle data in store")
 	err = contextRouting.c.store.Update(bi)
 	if err != nil {
 		contextRouting.Warn(log.Fields{
@@ -239,10 +275,30 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 
 	bundleContext, ok := bi.Properties["routing/context/context"].(map[string]string)
 	if !ok {
-		contextRouting.Warn(nil, "No context for bundle")
+		contextRouting.Warn(log.Fields{
+			"context": bi.Properties["routing/context/context"],
+		}, "No context for bundle")
 		bundleContext = make(map[string]string)
 	}
 	vm.Set("bundleContext", bundleContext)
+
+	source, ok := bi.Properties["routing/context/source"].(string)
+	if !ok {
+		contextRouting.Warn(log.Fields{
+			"source": bi.Properties["routing/context/source"],
+		}, "Unable to get bundle source")
+		source = "dtn:none"
+	}
+	vm.Set("source", source)
+
+	destination, ok := bi.Properties["routing/context/destination"].(string)
+	if !ok {
+		contextRouting.Warn(log.Fields{
+			"destination": bi.Properties["routing/context/destination"],
+		}, "Unable to get bundle destination")
+		destination = "dtn:none"
+	}
+	vm.Set("destination", destination)
 
 	contextRouting.contextSemaphore.RLock()
 	context := contextRouting.context
@@ -504,7 +560,7 @@ func (contextBlock *ContextBlock) UnmarshalCbor(r io.Reader) error {
 	structLength, err := cboring.ReadArrayLength(r)
 	if err != nil {
 		return err
-	} else if structLength != 3 {
+	} else if structLength != 2 {
 		return fmt.Errorf("expected 2 fields, got %d", structLength)
 	}
 
