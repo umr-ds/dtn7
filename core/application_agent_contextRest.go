@@ -7,6 +7,7 @@ import (
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -36,6 +37,8 @@ func NewContextAgent(c *Core, address string) *ContextRESTAgend {
 
 	router := mux.NewRouter()
 	router.HandleFunc("/send", agent.sendHandler).Methods("POST")
+	router.HandleFunc("/pending", agent.pendingHandler).Methods("GET")
+	router.HandleFunc("/size", agent.sizeHandler).Methods("GET")
 	srv := &http.Server{
 		Addr:         agent.address,
 		Handler:      router,
@@ -162,4 +165,90 @@ func (agent *ContextRESTAgend) sendHandler(w http.ResponseWriter, r *http.Reques
 	agent.c.SendBundle(&bndl)
 
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func (agent *ContextRESTAgend) sizeHandler(w http.ResponseWriter, r *http.Request) {
+	agent.Debug(nil, "Received size request")
+
+	pending, err := agent.c.store.QueryPending()
+	if err != nil {
+		agent.Warn(log.Fields{
+			"error": err,
+		}, "Error querying pending")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err = w.Write([]byte(err.Error()))
+		if err != nil {
+			agent.Warn(log.Fields{
+				"error": err,
+			}, "An error occurred, while handling the error...")
+		}
+		return
+	}
+
+	size := len(pending)
+	agent.Debug(log.Fields{
+		"size": size,
+	}, "Size of pending buffer")
+
+	_, err = w.Write([]byte(strconv.Itoa(size)))
+	if err != nil {
+		agent.Warn(log.Fields{
+			"error": err,
+		}, "Error writing response")
+
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func (agent *ContextRESTAgend) pendingHandler(w http.ResponseWriter, r *http.Request) {
+	agent.Debug(nil, "Received pending request")
+
+	pending, err := agent.c.store.QueryPending()
+	if err != nil {
+		agent.Warn(log.Fields{
+			"error": err,
+		}, "Error querying pending")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err = w.Write([]byte(err.Error()))
+		if err != nil {
+			agent.Warn(log.Fields{
+				"error": err,
+			}, "An error occurred, while handling the error...")
+		}
+		return
+	}
+
+	ids := make([]string, len(pending))
+	for i := 0; i < len(pending); i++ {
+		ids[i] = pending[i].Id
+	}
+	agent.Debug(log.Fields{
+		"ids": ids,
+	}, "Got pending bundle ids")
+
+	flattened, err := json.Marshal(ids)
+	if err != nil {
+		agent.Warn(log.Fields{
+			"error": err,
+		}, "Error marshalling ids")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err = w.Write([]byte(err.Error()))
+		if err != nil {
+			agent.Warn(log.Fields{
+				"error": err,
+			}, "An error occurred, while handling the error...")
+		}
+		return
+	}
+
+	_, err = w.Write(flattened)
+	if err != nil {
+		agent.Warn(log.Fields{
+			"error": err,
+		}, "Error writing response")
+
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }

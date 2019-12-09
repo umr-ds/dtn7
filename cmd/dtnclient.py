@@ -66,12 +66,39 @@ def send_bundle(
     )
 
     response: requests.Response = requests.post(f"{rest_url}/send", data=bundle_data)
-    print(f"Status: {response.status_code}")
+    if response.status_code != 202:
+        print(f"Status: {response.status_code}")
+    print(response.text)
+
+
+def get_pending(rest_url: str) -> None:
+    """Get contents of stored bundle buffer
+
+    Args:
+        rest_url (str): URL of the REST-interface
+    """
+    response: requests.Response = requests.get(f"{rest_url}/pending")
+    if response.status_code != 200:
+        print(f"Status: {response.status_code}")
+    print(response.text)
+
+
+def get_size(rest_url: str) -> None:
+    """Get size of stored bundle buffer
+
+    Args:
+        rest_url (str): URL of the REST-interface
+    """
+
+    response: requests.Response = requests.get(f"{rest_url}/size")
+    if response.status_code != 200:
+        print(f"Status: {response.status_code}")
     print(response.text)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Send and receive bundles")
+    parser.add_argument("action", help="One of [send, pending, size]")
     parser.add_argument("-p", "--payload", help="Specify payload file")
     parser.add_argument("-c", "--context", help="Specify context file")
     parser.add_argument(
@@ -85,13 +112,21 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    payload = load_payload(path=args.payload)
-    context = load_context(path=args.context)
     url = build_url(address=args.address, port=args.port)
 
-    send_bundle(
-        rest_url=url,
-        bundle_recipient=args.recipient,
-        bundle_context=context,
-        bundle_payload=payload,
-    )
+    if args.action == "send":
+        payload = load_payload(path=args.payload)
+        context = load_context(path=args.context)
+
+        send_bundle(
+            rest_url=url,
+            bundle_recipient=args.recipient,
+            bundle_context=context,
+            bundle_payload=payload,
+        )
+    elif args.action == "pending":
+        get_pending(rest_url=url)
+    elif args.action == "size":
+        get_size(rest_url=url)
+    else:
+        print("UNKNOWN ACTION")
