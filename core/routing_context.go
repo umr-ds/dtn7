@@ -61,6 +61,7 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 	contextRouting.Info(nil, "Initialising Context REST-Interface")
 	router := mux.NewRouter()
 	router.HandleFunc("/context/{contextName}", contextRouting.contextUpdateHandler).Methods("POST")
+	router.HandleFunc("/context", contextRouting.getHandler).Methods("GET")
 
 	srv := &http.Server{
 		Addr:         config.ListenAddress,
@@ -69,7 +70,9 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 		WriteTimeout: 15 * time.Second,
 	}
 	go srv.ListenAndServe()
-	contextRouting.Info(nil, "Finished initialising Context REST-Interface")
+	contextRouting.Info(log.Fields{
+		"address": config.ListenAddress,
+	}, "Finished initialising Context REST-Interface")
 
 	contextRouting.Info(nil, "Compiling javascript")
 	dat, err := ioutil.ReadFile(config.ScriptPath)
@@ -426,6 +429,37 @@ func (contextRouting *ContextRouting) contextUpdateHandler(w http.ResponseWriter
 	contextRouting.Debug(log.Fields{
 		"context": contextRouting.context,
 	}, "Successfully updated Context")
+}
+
+func (contextRouting *ContextRouting) getHandler(w http.ResponseWriter, r *http.Request) {
+	contextRouting.Debug(nil, "Received context request")
+
+	context, err := json.Marshal(contextRouting.context)
+	if err != nil {
+		contextRouting.Warn(log.Fields{
+			"error": err,
+		}, "Unable to marshal context data")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err = w.Write([]byte(err.Error()))
+		if err != nil {
+			contextRouting.Warn(log.Fields{
+				"error": err,
+			}, "An error occurred, while handling the error...")
+		}
+		return
+	}
+
+	contextRouting.Debug(log.Fields{
+		"context": context,
+	}, "Marshaled context data")
+	_, err = w.Write(context)
+	if err != nil {
+		contextRouting.Warn(log.Fields{
+			"error": err,
+		}, "Error writing response data")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
 
 func (contextRouting *ContextRouting) broadcastCron() {

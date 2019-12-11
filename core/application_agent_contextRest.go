@@ -47,7 +47,9 @@ func NewContextAgent(c *Core, address string) *ContextRESTAgend {
 	}
 	go srv.ListenAndServe()
 
-	agent.Info(nil, "Initialisation successful")
+	agent.Info(log.Fields{
+		"address": address,
+	}, "Initialisation successful")
 	return &agent
 }
 

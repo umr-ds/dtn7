@@ -3,9 +3,9 @@
 import argparse
 import base64
 import json
-import requests
+from typing import Any, Dict, List
 
-from typing import Any, Dict
+import requests
 
 
 def load_payload(path: str) -> str:
@@ -53,7 +53,7 @@ def send_bundle(
     Args:
         rest_url (str): URL of the REST-interface
         bundle_recipient (str): DTN EndpointID of the bundle's recipient
-        bundle_context (str): Bundle's context
+        bundle_context (Dict[str, Any]): Bundle's context
         bundle_payload (str): Bundle payload
     """
 
@@ -71,6 +71,37 @@ def send_bundle(
     print(response.text)
 
 
+def send_context(
+    rest_url: str, context_name: str, node_context: Dict[str, Any]
+) -> None:
+    """Sends node context information to the routing daemon
+
+    Args:
+        rest_url (str): URL of the REST-interface
+        context_name (str): name of the context item
+        node_context (Dict[str, Any]): Actual context
+    """
+    contest_str: str = json.dumps(node_context)
+    response: requests.Response = requests.post(
+        f"{rest_url}/context/{context_name}", data=contest_str
+    )
+    if response.status_code != 202:
+        print(f"Status: {response.status_code}")
+    print(response.text)
+
+
+def get_node_context(rest_url: str) -> None:
+    """Get all the Node's context information
+
+    Args:
+        rest_url (str): URL of the REST-interface
+    """
+    response: requests.Response = requests.get(f"{rest_url}/context")
+    if response.status_code != 200:
+        print(f"Status: {response.status_code}")
+    print(response.text)
+
+
 def get_pending(rest_url: str) -> None:
     """Get contents of stored bundle buffer
 
@@ -80,7 +111,11 @@ def get_pending(rest_url: str) -> None:
     response: requests.Response = requests.get(f"{rest_url}/pending")
     if response.status_code != 200:
         print(f"Status: {response.status_code}")
-    print(response.text)
+        print(response.text)
+    else:
+        bundles: List[str] = json.loads(response.text)
+        for bundle in bundles:
+            print(bundle)
 
 
 def get_size(rest_url: str) -> None:
@@ -97,36 +132,66 @@ def get_size(rest_url: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Send and receive bundles")
-    parser.add_argument("action", help="One of [send, pending, size]")
+    parser = argparse.ArgumentParser(description="Interact with dtnd")
+    parser.add_argument("interface", help="One of [bundle, context]")
+    parser.add_argument("action", help="One of [send, get, size]")
     parser.add_argument("-p", "--payload", help="Specify payload file")
     parser.add_argument("-c", "--context", help="Specify context file")
+    parser.add_argument(
+        "-cn", "--context_name", help="When sending node context, supply its name"
+    )
     parser.add_argument(
         "-a", "--address", default="localhost", help="Address of the REST-interface"
     )
     parser.add_argument(
-        "-po", "--port", type=int, default=35038, help="Port of the REST-interface"
+        "-pb",
+        "--port_bundle",
+        type=int,
+        default=35038,
+        help="Port of the bundle REST-interface",
+    )
+    parser.add_argument(
+        "-pc",
+        "--port_context",
+        type=int,
+        default=35043,
+        help="Port of the context REST-interface",
     )
     parser.add_argument(
         "-r", "--recipient", help="DTN-EndpointID of the bundle's recipient"
     )
     args = parser.parse_args()
 
-    url = build_url(address=args.address, port=args.port)
+    if args.interface == "bundle":
+        url = build_url(address=args.address, port=args.port_bundle)
 
-    if args.action == "send":
-        payload = load_payload(path=args.payload)
-        context = load_context(path=args.context)
+        if args.action == "send":
+            payload = load_payload(path=args.payload)
+            context = load_context(path=args.context)
 
-        send_bundle(
-            rest_url=url,
-            bundle_recipient=args.recipient,
-            bundle_context=context,
-            bundle_payload=payload,
-        )
-    elif args.action == "pending":
-        get_pending(rest_url=url)
-    elif args.action == "size":
-        get_size(rest_url=url)
+            send_bundle(
+                rest_url=url,
+                bundle_recipient=args.recipient,
+                bundle_context=context,
+                bundle_payload=payload,
+            )
+        elif args.action == "get":
+            get_pending(rest_url=url)
+        elif args.action == "size":
+            get_size(rest_url=url)
+        else:
+            print("UNSUPPORTED ACTION")
+    elif args.interface == "context":
+        url = build_url(address=args.address, port=args.port_context)
+
+        if args.action == "send":
+            context = load_context(path=args.context)
+            send_context(
+                rest_url=url, context_name=args.context_name, node_context=context
+            )
+        elif args.action == "get":
+            get_node_context(rest_url=url)
+        else:
+            print("UNSUPPORTED ACTION")
     else:
-        print("UNKNOWN ACTION")
+        print("UNKNOWN INTERFACE")
