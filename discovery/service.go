@@ -46,21 +46,23 @@ func (ds *DiscoveryService) notify(discovered peerdiscovery.Discovered) {
 }
 
 func (ds *DiscoveryService) handleDiscovery(dm DiscoveryMessage, addr string) {
-	log.WithFields(log.Fields{
-		"discovery": ds,
-		"peer":      addr,
-		"message":   dm,
-	}).Debug("Peer discovery received a message")
-
 	if dm.Endpoint == ds.c.NodeId {
+		/*
 		log.WithFields(log.Fields{
 			"discovery": ds,
 			"peer":      addr,
 			"message":   dm,
 		}).Debug("Peer discovery is from this node, dropping")
+		 */
 
 		return
 	}
+
+	log.WithFields(log.Fields{
+		"discovery": ds,
+		"peer":      addr,
+		"message":   dm,
+	}).Debug("Peer discovery received a message")
 
 	var client cla.Convergence
 	switch dm.Type {
