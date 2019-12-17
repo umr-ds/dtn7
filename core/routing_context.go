@@ -102,6 +102,16 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 		_ = extensionBlockManager.Register(NewNodeContextBlock(contextRouting.context))
 	}
 
+	/*
+		contextRouting.Info(nil, "Setting up cron jobs")
+		err = c.cron.Register("context_broadcast", contextRouting.broadcastCron, time.Second)
+		if err != nil {
+			contextRouting.Warn(log.Fields{
+				"reason": err,
+			}, "Could not register broadcast cron")
+		}
+	*/
+
 	contextRouting.Info(nil, "Finished Initialisation")
 	return &contextRouting
 }
@@ -321,7 +331,7 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 	}
 	contextRouting.contextSemaphore.RUnlock()
 
-	selected := make([]string, len(sender))
+	selected := make([]string, len(peers))
 	err = vm.ExportTo(result, &selected)
 	if err != nil {
 		contextRouting.Warn(log.Fields{
@@ -333,7 +343,7 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 		"senders": selected,
 	}, "Javascript returned selection of senders")
 
-	selectedSenders := getSendersWithMatchingIDs(sender, selected)
+	selectedSenders := contextRouting.getSendersWithMatchingIDs(contextRouting.c.claManager.Sender(), selected)
 
 	contextRouting.Debug(log.Fields{
 		"CLAs": selectedSenders,
@@ -502,12 +512,21 @@ func senderNames(senders []cla.ConvergenceSender) []string {
 }
 
 // getSendersWithMatchingIDs takes the complete list of all senders and returns those with names matching 'selected'
-func getSendersWithMatchingIDs(senders []cla.ConvergenceSender, selected []string) []cla.ConvergenceSender {
+func (contextRouting *ContextRouting) getSendersWithMatchingIDs(senders []cla.ConvergenceSender, selected []string) []cla.ConvergenceSender {
+	contextRouting.Debug(log.Fields{
+		"senders":  senders,
+		"selected": selected,
+	}, "Doing reverse cla name-id-lookup")
+
 	sendersMap := make(map[string]cla.ConvergenceSender, len(senders))
 	for i := 0; i < len(senders); i++ {
 		name := senders[i].GetPeerEndpointID().String()
 		sendersMap[name] = senders[i]
 	}
+
+	contextRouting.Debug(log.Fields{
+		"sendersMap": sendersMap,
+	}, "")
 
 	selectedSenders := make([]cla.ConvergenceSender, len(selected))
 	for i := 0; i < len(selected); i++ {
@@ -515,6 +534,10 @@ func getSendersWithMatchingIDs(senders []cla.ConvergenceSender, selected []strin
 			selectedSenders[i] = sendersMap[selected[i]]
 		}
 	}
+
+	contextRouting.Debug(log.Fields{
+		"selectedSenders": selectedSenders,
+	}, "Reverse lookup complete")
 
 	return selectedSenders
 }

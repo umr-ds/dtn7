@@ -36,7 +36,7 @@ def send_context(
 
 def send_integer(url: str, name: str) -> None:
     print(f"Sending random integer context with name '{name}'")
-    value = {"value": randint(1, 10)}
+    value = {"value": randint(3, 10)}
     send_context(rest_url=url, context_name=name, node_context=value)
 
 
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     # context_collection: Dict[str, Any] = load_context(path=args.context_file)
     context_rest: str = build_url(address=REST_ADDRESS, port=CONTEXT_PORT)
 
-    sleep(10)
+    # sleep(10)
 
     while True:
         # send_random_context(url=context_rest, context=context_collection)
