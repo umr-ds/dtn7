@@ -97,5 +97,5 @@ ageinterval = "1m"
 
 # config for context routing
 [routing.contextconf]
-scriptpath = "context.js"
+scriptpath = "context_data.js"
 listenaddress = "127.0.0.1:35043"

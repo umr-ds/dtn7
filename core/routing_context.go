@@ -219,7 +219,7 @@ func (contextRouting *ContextRouting) NotifyIncoming(bp BundlePack) {
 		} else {
 			contextRouting.Warn(log.Fields{
 				"contextBlock": contextBlock,
-			}, "Unknown contextBlcok-type")
+			}, "Unknown contextBlock-type")
 		}
 	}
 
