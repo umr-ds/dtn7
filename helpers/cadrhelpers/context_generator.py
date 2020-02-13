@@ -1,11 +1,11 @@
 #! /usr/bin/env python3
 
 import argparse
-import json
-import requests
 from typing import Any, Dict
 from time import sleep
 from random import randint, choice
+
+from cadrhelpers.dtnclient import send_context
 
 REST_ADDRESS = "127.0.0.1"
 CONTEXT_PORT = 35043
@@ -13,25 +13,6 @@ CONTEXT_PORT = 35043
 
 def build_url(address: str, port: int) -> str:
     return f"http://{address}:{port}"
-
-
-def send_context(
-    rest_url: str, context_name: str, node_context: Dict[str, Any]
-) -> None:
-    """Sends node context information to the routing daemon
-
-    Args:
-        rest_url (str): URL of the REST-interface
-        context_name (str): name of the context item
-        node_context (Dict[str, Any]): Actual context
-    """
-    contest_str: str = json.dumps(node_context)
-    response: requests.Response = requests.post(
-        f"{rest_url}/context/{context_name}", data=contest_str
-    )
-    if response.status_code != 202:
-        print(f"Status: {response.status_code}")
-    print(response.text)
 
 
 def send_integer(url: str, name: str) -> None:
