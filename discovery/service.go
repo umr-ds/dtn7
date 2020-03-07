@@ -58,11 +58,13 @@ func (ds *DiscoveryService) handleDiscovery(dm DiscoveryMessage, addr string) {
 		return
 	}
 
+	/*
 	log.WithFields(log.Fields{
 		"discovery": ds,
 		"peer":      addr,
 		"message":   dm,
 	}).Debug("Peer discovery received a message")
+	 */
 
 	var client cla.Convergence
 	switch dm.Type {

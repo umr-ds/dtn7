@@ -74,10 +74,12 @@ func (ce *convergenceElem) handler() {
 			return
 
 		case cs := <-ce.conv.Channel():
+			/*
 			log.WithFields(log.Fields{
 				"cla":    ce.conv,
 				"status": cs.String(),
 			}).Debug("Forwarding ConvergenceStatus to Manager")
+			 */
 
 			ce.convChnl <- cs
 		}
@@ -95,10 +97,12 @@ func (ce *convergenceElem) activate() (successful, retry bool) {
 	defer ce.mutex.Unlock()
 
 	if ce.ttl == 0 && !ce.conv.IsPermanent() {
+		/*
 		log.WithFields(log.Fields{
 			"cla":   ce.conv,
 			"error": "TTL expired",
 		}).Info("Failed to start CLA")
+		 */
 
 		return false, false
 	}
@@ -117,6 +121,7 @@ func (ce *convergenceElem) activate() (successful, retry bool) {
 
 		return true, false
 	} else {
+		/*
 		log.WithFields(log.Fields{
 			"cla":       ce.conv,
 			"permanent": ce.conv.IsPermanent(),
@@ -124,6 +129,7 @@ func (ce *convergenceElem) activate() (successful, retry bool) {
 			"retry":     claRetry,
 			"error":     claErr,
 		}).Info("Failed to start CLA")
+		 */
 
 		if claRetry {
 			ce.ttl -= 1

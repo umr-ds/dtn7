@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/dtn7/cboring"
 	"github.com/dtn7/dtn7-go/bundle"
 	"github.com/dtn7/dtn7-go/cla"
@@ -99,10 +97,12 @@ func (client *MTCPClient) handler() {
 			client.mutex.Unlock()
 
 			if err != nil {
+				/*
 				log.WithFields(log.Fields{
 					"client": client.String(),
 					"error":  err,
 				}).Warn("MTCPClient: Keepalive errored")
+				 */
 
 				client.reportChan <- cla.NewConvergencePeerDisappeared(client, client.GetPeerEndpointID())
 			}
