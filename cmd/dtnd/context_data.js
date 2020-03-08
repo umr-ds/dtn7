@@ -1,20 +1,23 @@
-loggingFunc("This is a test");
-
-function vectorAngle(vecA, vecB) {
-    var dot = (vecA.x * vecB.x) + (vecA.y * vecB.y);
-    var magA = Math.sqrt(Math.pow(vecA.x, 2) + Math.pow(vecA.y, 2));
-    var magB = Math.sqrt(Math.pow(vecB.x, 2) + Math.pow(vecB.y, 2));
+function vectorAngle(xa, ya, xb, yb) {
+    loggingFunc("vectorAngle");
+    var dot = (xa * xb) + (ya * yb);
+    var magA = Math.sqrt(Math.pow(xa, 2) + Math.pow(ya, 2));
+    var magB = Math.sqrt(Math.pow(xb, 2) + Math.pow(yb, 2));
     return Math.acos(dot / (magA * magB))
 }
 
 function sensorToSensor(peerID) {
+    loggingFunc("sensorToSensor");
+    /*
     // check if peer accepts this type of data
     var bundleType = bundleContext["type"];
     var acceptedTypes = JSON.parse(peerContext[peerID]["accepted_types"]);
     if (!(acceptedTypes.includes(bundleType))) {
         return false;
     }
+     */
 
+    /*
     // check peer's battery
     var peerBattery = JSON.parse(peerContext[peerID]["battery"]);
     var batteryLevel = peerBattery.level_abs;
@@ -23,7 +26,9 @@ function sensorToSensor(peerID) {
     if (peerBatteryLow) {
         return false;
     }
+     */
 
+    /*
     // check own battery
     var ownBattery = JSON.parse(context["battery"]);
     batteryLevel = ownBattery.level_abs;
@@ -32,15 +37,26 @@ function sensorToSensor(peerID) {
     if (ownBatteryLow && !peerBatteryLow) {
         return true;
     }
+     */
 
-    var ownDistance = JSON.parse(context["backbone"]).distance;
-    var peerDistance = JSON.parse(peerContext[peerID]["backbone"]).distance;
+    var distanceJSON = context["backbone"];
+    loggingFunc("Own distance: " + distanceJSON);
+    var ownDistance = JSON.parse(distanceJSON).distance;
+
+    var peerJSON = peerContext[peerID]["backbone"];
+    loggingFunc("Peer distance: " + peerJSON);
+    var peerDistance = JSON.parse(peerJSON).distance;
     if (peerDistance < ownDistance) {
         return true;
     }
 
-    var ownConnectedness = JSON.parse(context["connectedness"]);
-    var peerConnectedness = JSON.parse(peerContext[peerID]["connectedness"]);
+    var conJSON = context["connectedness"];
+    loggingFunc("Own connectedness: " + conJSON);
+    var ownConnectedness = JSON.parse(conJSON)["value"];
+
+    peerJSON = peerContext[peerID]["connectedness"];
+    loggingFunc("Peer connectedness: " + peerJSON);
+    var peerConnectedness = JSON.parse(peerJSON)["value"];
     return peerConnectedness > ownConnectedness;
 }
 
@@ -50,26 +66,38 @@ function sensorToBackbone(peerID) {
 }
 
 function sensorToGuest(peerID) {
+    loggingFunc("sensorToGuest");
+    /*
     var peerSubscriptions = JSON.parse(peerContext[peerID]["subscriptions"]);
     var bundleChannel = JSON.parse(bundleConext["channel"]);
     if (peerSubscriptions.includes(bundleChannel)) {
         return true;
     }
+     */
 
+    /*
     var peerMule = JSON.parse(peerContext[peerID]["mule"]);
     if (!peerMule) {
         return false
     }
+     */
 
+    /*
     var bundleType = bundleContext["type"];
     var acceptedTypes = JSON.parse(peerContext[peerID]["accepted_types"]);
     if (!acceptedTypes.contains(bundleType)) {
         return false;
     }
+     */
+    loggingFunc("Bundle context: " + bundleContext);
+    var bndlContext = JSON.parse(bundleContext);
 
-    var bundleDestination = JSON.parse(context["destination"]);
-    var nodeVector = JSON.parse(peerContext[peerID]["movement"]);
-    var angle = vectorAngle(bundleDestination, nodeVector);
+    var vectorJSON = peerContext[peerID]["movement"];
+    loggingFunc("vectorJSON: " + vectorJSON);
+    var nodeVector = JSON.parse(vectorJSON);
+
+    var angle = vectorAngle(bndlContext.x_dest, bndlContext.y_dest, nodeVector.x, nodeVector.y);
+    loggingFunc("Angle: " + angle);
     return angle < 0.79
 }
 
@@ -100,6 +128,7 @@ function backboneToGuest(peerID) {
 }
 
 function guestToSensor(peerID) {
+    loggingFunc("guestToSensor");
     return false;
 }
 
@@ -109,32 +138,47 @@ function guestToBackbone(peerID) {
 }
 
 function guestToGuest(peerID) {
+    loggingFunc("guestToGuest");
+    /*
     var peerSubscriptions = JSON.parse(peerContext[peerID]["subscriptions"]);
     var bundleChannel = JSON.parse(bundleConext["channel"]);
     if (peerSubscriptions.includes(bundleChannel)) {
         return true;
     }
+     */
 
+    /*
     var peerMule = JSON.parse(peerContext[peerID]["mule"]);
     if (!peerMule) {
         return false
     }
+     */
 
+    /*
     var bundleType = bundleContext["type"];
     var acceptedTypes = JSON.parse(peerContext[peerID]["accepted_types"]);
     if (!acceptedTypes.contains(bundleType)) {
         return false;
     }
+     */
 
-    var ownVector = JSON.parse(context["movement"]);
-    var peerVector = JSON.parse(peerContext[peerID]["movement"]);
-    var angle = vectorAngle(ownVector, peerVector);
+    var vectorJSON = context["movement"];
+    loggingFunc("Own movement: " + vectorJSON);
+    var ownVector = JSON.parse(vectorJSON);
+
+    var peerJSON = peerContext[peerID]["movement"];
+    loggingFunc("Peer movement: " + peerJSON);
+    var peerVector = JSON.parse(peerJSON);
+    var angle = vectorAngle(ownVector.x, ownVector.y, peerVector.x, peerVector.y);
+    loggingFunc("Angle: " + angle);
     if (angle > 0.79) {
         return false;
     }
 
     var ownSpeed = Math.sqrt(Math.pow(ownVector.x, 2) + Math.pow(ownVector.y, 2));
+    loggingFunc("Own speed: " + ownSpeed);
     var peerSpeed = Math.sqrt(Math.pow(peerVector.x, 2) + Math.pow(peerVector.y, 2));
+    loggingFunc("Peer speed: " + peerSpeed);
     return peerSpeed > ownSpeed;
 }
 
@@ -147,8 +191,19 @@ for (var i = 0; i < len; i++) {
     var peer = peers[i];
     loggingFunc("Peer: " + peer);
 
-    var ownRole = JSON.parse(context["role"]);
-    var peerRole = JSON.parse(peerContext[peer]["role"]);
+    var roleJSON = context["role"];
+    //loggingFunc("roleJSON: " + roleJSON);
+    var ownRole = JSON.parse(roleJSON)["node_type"];
+    loggingFunc("Own Role: " + ownRole);
+
+    var thisPeer = peerContext[peer];
+    if (thisPeer === undefined) {
+        continue;
+    }
+
+    var peerRole = JSON.parse(thisPeer["role"])["node_type"];
+    loggingFunc("Peer Role: " + peerRole);
+
     var forward = false;
     switch (ownRole) {
         case "sensor":
@@ -157,9 +212,10 @@ for (var i = 0; i < len; i++) {
                     forward = sensorToSensor(peer);
                     break;
                 case "backbone":
-                    forward = sensorToBackbone(peer);
+                    // backbones are now sinks, so we always forward
+                    forward = true;
                     break;
-                case "guest":
+                case "visitor":
                     forward = sensorToGuest(peer);
                     break;
                 default:
@@ -167,29 +223,19 @@ for (var i = 0; i < len; i++) {
             }
             break;
         case "backbone":
-            switch (peerRole) {
-                case "sensor":
-                    forward = backboneToSensor(peer);
-                    break;
-                case "backbone":
-                    forward = backboneToBackbone(peer);
-                    break;
-                case "guest":
-                    forward = backboneToGuest(peer);
-                    break;
-                default:
-                    loggingFunc("Unknown node type: " + peerRole);
-            }
+            // For this scenario, we decided that backbone nodes should be sinks and therefore, they never forward
+            forward = false;
             break;
-        case "guest":
+        case "visitor":
             switch (peerRole) {
                 case "sensor":
                     forward = guestToSensor(peer);
                     break;
                 case "backbone":
-                    forward = guestToBackbone(peer);
+                    // backbones are now sinks, so we always forward
+                    forward = true;
                     break;
-                case "guest":
+                case "visitor":
                     forward = guestToGuest(peer);
                     break;
                 default:
@@ -200,9 +246,11 @@ for (var i = 0; i < len; i++) {
             loggingFunc("Unknown node type: " + ownRole);
     }
 
-     if (forward) {
-         senders.push(peer);
-     }
+    loggingFunc("Will forward to peer " + peer + ": " + forward);
+
+    if (forward) {
+        senders.push(peer);
+    }
 }
 
 senders;

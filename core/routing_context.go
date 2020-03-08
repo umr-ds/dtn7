@@ -102,15 +102,13 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 		_ = extensionBlockManager.Register(NewNodeContextBlock(contextRouting.context))
 	}
 
-	/*
-		contextRouting.Info(nil, "Setting up cron jobs")
-		err = c.cron.Register("context_broadcast", contextRouting.broadcastCron, time.Second)
-		if err != nil {
-			contextRouting.Warn(log.Fields{
-				"reason": err,
-			}, "Could not register broadcast cron")
-		}
-	*/
+	contextRouting.Info(nil, "Setting up cron jobs")
+	err = c.cron.Register("context_broadcast", contextRouting.broadcastCron, time.Minute)
+	if err != nil {
+		contextRouting.Warn(log.Fields{
+			"reason": err,
+		}, "Could not register broadcast cron")
+	}
 
 	contextRouting.Info(nil, "Finished Initialisation")
 	return &contextRouting
@@ -191,6 +189,7 @@ func (contextRouting *ContextRouting) NotifyIncoming(bp BundlePack) {
 				"context": context,
 			}, "Parsed bundle context")
 
+			bi.Properties["routing/context/type"] = contextBlock.Type
 			bi.Properties["routing/context/context"] = context
 			bi.Properties["routing/context/source"] = bndl.PrimaryBlock.SourceNode.String()
 			bi.Properties["routing/context/destination"] = bndl.PrimaryBlock.SourceNode.String()
@@ -201,21 +200,21 @@ func (contextRouting *ContextRouting) NotifyIncoming(bp BundlePack) {
 			}, "Is context bundle")
 
 			// if it's from us, do nothing
-			if bndl.PrimaryBlock.SourceNode == contextRouting.c.NodeId {
-				return
+			if bndl.PrimaryBlock.SourceNode != contextRouting.c.NodeId {
+				peerID := bndl.PrimaryBlock.SourceNode
+				context := contextBlock.Context
+
+				contextRouting.Debug(log.Fields{
+					"source":  peerID,
+					"context": context,
+				}, "Received peer context")
+
+				contextRouting.contextSemaphore.Lock()
+				contextRouting.peerContext[peerID.String()] = context
+				contextRouting.contextSemaphore.Unlock()
 			}
 
-			peerID := bndl.PrimaryBlock.SourceNode
-			context := contextBlock.Context
-
-			contextRouting.Debug(log.Fields{
-				"source":  peerID,
-				"context": context,
-			}, "Received peer context")
-
-			contextRouting.contextSemaphore.Lock()
-			contextRouting.peerContext[peerID.String()] = context
-			contextRouting.contextSemaphore.Unlock()
+			bi.Properties["routing/context/type"] = contextBlock.Type
 		} else {
 			contextRouting.Warn(log.Fields{
 				"contextBlock": contextBlock,
@@ -262,8 +261,26 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 		return
 	}
 
+	bi, err := contextRouting.c.store.QueryId(bp.Id)
+	if err != nil {
+		contextRouting.Warn(log.Fields{
+			"bundle": bndl.ID(),
+			"error":  err,
+		}, "Failed to process a non-stored Bundle")
+		return
+	}
+
+	bundleType, ok := bi.Properties["routing/context/type"]
+	if !ok {
+		contextRouting.Warn(log.Fields{
+			"bundle":      bndl.ID(),
+			"stored data": bi.Properties,
+		}, "No bundle type stored")
+		return nil, false
+	}
+
 	// handle context bundles
-	if _, err := bndl.ExtensionBlock(ExtBlockTypeProphetBlock); err == nil {
+	if bundleType == NodeContext {
 		if bndl.PrimaryBlock.SourceNode == contextRouting.c.NodeId {
 			// if we are the originator of this bundle, we forward it to everyone and then we can directly delete it
 			return contextRouting.c.claManager.Sender(), true
@@ -273,43 +290,54 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 		}
 	}
 
-	contextRouting.Debug(nil, "Initialising Javascript VM")
+	contextRouting.Debug(log.Fields{
+		"bundle": bndl.ID(),
+	}, "Initialising Javascript VM")
 	vm := goja.New()
 	vm.Set("loggingFunc", loggingFunc)
-
-	// load bundle context
-	bi, err := contextRouting.c.store.QueryId(bp.Id)
-	if err != nil {
-		contextRouting.Warn(log.Fields{
-			"error": err,
-		}, "Failed to process a non-stored Bundle")
-		return
-	}
 
 	bundleContext, ok := bi.Properties["routing/context/context"].(map[string]string)
 	if !ok {
 		contextRouting.Warn(log.Fields{
+			"bundle":  bndl.ID(),
 			"context": bi.Properties["routing/context/context"],
 		}, "No context for bundle")
-		bundleContext = make(map[string]string)
+		return nil, false
+	} else {
+		contextRouting.Debug(log.Fields{
+			"bundle":  bndl.ID(),
+			"context": bundleContext,
+		}, "Bundle Context")
 	}
 	vm.Set("bundleContext", bundleContext)
 
 	source, ok := bi.Properties["routing/context/source"].(string)
 	if !ok {
 		contextRouting.Warn(log.Fields{
+			"bundle": bndl.ID(),
 			"source": bi.Properties["routing/context/source"],
 		}, "Unable to get bundle source")
-		source = "dtn:none"
+		return nil, false
+	} else {
+		contextRouting.Debug(log.Fields{
+			"bundle": bndl.ID(),
+			"source": source,
+		}, "Bundle Source")
 	}
 	vm.Set("source", source)
 
 	destination, ok := bi.Properties["routing/context/destination"].(string)
 	if !ok {
 		contextRouting.Warn(log.Fields{
+			"bundle":      bndl.ID(),
 			"destination": bi.Properties["routing/context/destination"],
 		}, "Unable to get bundle destination")
-		destination = "dtn:none"
+		return nil, false
+	} else {
+		contextRouting.Debug(log.Fields{
+			"bundle":      bndl.ID(),
+			"destination": destination,
+		}, "Bundle Destination")
 	}
 	vm.Set("destination", destination)
 
@@ -317,36 +345,42 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundlePack) (sender []c
 	context := contextRouting.context
 	peerContext := contextRouting.peerContext
 	peers := senderNames(contextRouting.c.claManager.Sender())
+	contextRouting.contextSemaphore.RUnlock()
 
 	vm.Set("context", context)
 	vm.Set("peerContext", peerContext)
 	vm.Set("peers", peers)
-	contextRouting.Debug(nil, "Finished VM initialisation")
+	contextRouting.Debug(log.Fields{
+		"bundle": bndl.ID(),
+	}, "Finished VM initialisation")
 	result, err := vm.RunProgram(contextRouting.javascript)
 	if err != nil {
 		contextRouting.Warn(log.Fields{
-			"error": err,
+			"bundle": bndl.ID(),
+			"error":  err,
 		}, "Error executing javascript")
 		return
 	}
-	contextRouting.contextSemaphore.RUnlock()
 
 	selected := make([]string, len(peers))
 	err = vm.ExportTo(result, &selected)
 	if err != nil {
 		contextRouting.Warn(log.Fields{
-			"error": err,
+			"bundle": bndl.ID(),
+			"error":  err,
 		}, "Could not export javascript return to string array")
 		return
 	}
 	contextRouting.Debug(log.Fields{
+		"bundle":  bndl.ID(),
 		"senders": selected,
 	}, "Javascript returned selection of senders")
 
 	selectedSenders := contextRouting.getSendersWithMatchingIDs(contextRouting.c.claManager.Sender(), selected)
 
 	contextRouting.Debug(log.Fields{
-		"CLAs": selectedSenders,
+		"bundle": bndl.ID(),
+		"CLAs":   selectedSenders,
 	}, "")
 
 	return selectedSenders, false

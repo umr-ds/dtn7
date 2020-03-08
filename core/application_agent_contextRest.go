@@ -139,6 +139,10 @@ func (agent *ContextRESTAgend) sendHandler(w http.ResponseWriter, r *http.Reques
 			}, "An error occurred, while handling the error...")
 		}
 		return
+	} else {
+		agent.Debug(log.Fields{
+			"recipient": recipient,
+		}, "Message recipient")
 	}
 
 	builder := bundle.Builder()
@@ -162,6 +166,10 @@ func (agent *ContextRESTAgend) sendHandler(w http.ResponseWriter, r *http.Reques
 			}, "An error occurred, while handling the error...")
 		}
 		return
+	} else {
+		agent.Debug(log.Fields{
+			"bundle": bndl,
+		}, "Successfully built bundle")
 	}
 
 	agent.c.SendBundle(&bndl)
