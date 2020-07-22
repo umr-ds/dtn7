@@ -35,11 +35,11 @@ type SimBet struct {
 	// peerAdjacencies contains other node's adjacency lists, which we have received via an encounter
 	peerAdjacencies map[bundle.EndpointID][]bundle.EndpointID
 	// similarities contains this node's similarity values for all other nodes
-	similarities map[bundle.EndpointID]float64
+	similarities map[bundle.EndpointID]uint64
 	// betweenness is this node's betweenness value
 	betweenness float64
 	// peerSimilarities contains the similarities-lists of all encountered nodes
-	peerSimilarities map[bundle.EndpointID]map[bundle.EndpointID]float64
+	peerSimilarities map[bundle.EndpointID]map[bundle.EndpointID]uint64
 	// peerBetweenness contains the betweenness-values of all encountered nodes
 	peerBetweenness map[bundle.EndpointID]float64
 }
@@ -53,9 +53,9 @@ func NewSimBet(c *Core, config SimBetConfig) *SimBet {
 		length:           1,
 		adjacencies:      make(map[bundle.EndpointID]bool),
 		peerAdjacencies:  make(map[bundle.EndpointID][]bundle.EndpointID),
-		similarities:     make(map[bundle.EndpointID]float64),
+		similarities:     make(map[bundle.EndpointID]uint64),
 		betweenness:      0.0,
-		peerSimilarities: make(map[bundle.EndpointID]map[bundle.EndpointID]float64),
+		peerSimilarities: make(map[bundle.EndpointID]map[bundle.EndpointID]uint64),
 		peerBetweenness:  make(map[bundle.EndpointID]float64),
 	}
 
@@ -263,7 +263,7 @@ func (simBet *SimBet) sendAdjacencies(peerID bundle.EndpointID) {
 
 func (simBet *SimBet) sendSummaryVector(peerID bundle.EndpointID) {
 	// filter similarities. we only want the values for nodes for which we are actually carrying messages
-	filteredSimilarities := make(map[bundle.EndpointID]float64)
+	filteredSimilarities := make(map[bundle.EndpointID]uint64)
 	pendingBundles, err := simBet.c.store.QueryPending()
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -299,10 +299,24 @@ func (simBet *SimBet) sendSummaryVector(peerID bundle.EndpointID) {
 }
 
 func (simBet *SimBet) updateSimilarity() {
-	// TODO: Dummy Implementation
+	simBet.dataMutex.Lock()
+	defer simBet.dataMutex.Unlock()
+	for node, _ := range simBet.nodeIndex {
+		var similarity uint64
+		similarity = 0
+		peerAdjacencies := adjacencySliceToMap(simBet.peerAdjacencies[node])
+		for adjacentNode, _ := range simBet.adjacencies {
+			adjacentToSelf := simBet.adjacencies[adjacentNode]
+			adjacentToPeer := peerAdjacencies[adjacentNode]
+			if adjacentToSelf && adjacentToPeer {
+				similarity += 1
+			}
+		}
+		simBet.similarities[node] = similarity
+	}
 }
 
-func (simBet *SimBet) updateBetweenness() {
+func (simBet *SimBet) buildAdjacencyMatrix() *mat.Dense {
 	log.Debug("Building adjacency matrix")
 	// initialise matrix
 	adjacencyMatrix := mat.NewDense(int(simBet.length), int(simBet.length), nil)
@@ -333,6 +347,11 @@ func (simBet *SimBet) updateBetweenness() {
 	log.WithFields(log.Fields{
 		"matrix": adjacencyMatrix,
 	}).Debug("Finished building adjacency matrix")
+	return adjacencyMatrix
+}
+
+func (simBet *SimBet) updateBetweenness() {
+	adjacencyMatrix := simBet.buildAdjacencyMatrix()
 
 	var aSquared mat.Dense
 	aSquared.Mul(adjacencyMatrix, adjacencyMatrix)
@@ -341,7 +360,7 @@ func (simBet *SimBet) updateBetweenness() {
 	}, "Squared matrix")
 
 	xDim, yDim := aSquared.Dims()
-	ones := make([]float64, xDim * yDim)
+	ones := make([]float64, xDim*yDim)
 	for i, _ := range ones {
 		ones[i] = 1.0
 	}
@@ -375,8 +394,8 @@ func (simBet *SimBet) updateBetweenness() {
 }
 
 func (simBet *SimBet) computeSimUtil(otherNode bundle.EndpointID, destination bundle.EndpointID) float64 {
-	similarity := simBet.similarities[destination]
-	return similarity / (similarity + simBet.peerSimilarities[otherNode][destination])
+	similarity := float64(simBet.similarities[destination])
+	return similarity / (similarity + float64(simBet.peerSimilarities[otherNode][destination]))
 }
 
 func (simBet *SimBet) computeBetUtil(otherNode bundle.EndpointID) float64 {
@@ -399,6 +418,14 @@ func adjacencyMapToSlice(adjacencies map[bundle.EndpointID]bool) []bundle.Endpoi
 	}
 
 	return adjSlice
+}
+
+func adjacencySliceToMap(adjacencies []bundle.EndpointID) map[bundle.EndpointID]bool {
+	adjacencyMap := make(map[bundle.EndpointID]bool, len(adjacencies))
+	for _, nodeID := range adjacencies {
+		adjacencyMap[nodeID] = true
+	}
+	return adjacencyMap
 }
 
 // track node adds a node's id to the nodeIndex-map
@@ -490,10 +517,10 @@ const ExtBlockTypeSimBetSummaryVector uint64 = 196
 // for all nodes which are recipients of carried bundles
 type SimBetSummaryVector struct {
 	Betweenness  float64
-	Similarities map[bundle.EndpointID]float64
+	Similarities map[bundle.EndpointID]uint64
 }
 
-func NewSimBetSummaryVector(betweenness float64, similarities map[bundle.EndpointID]float64) *SimBetSummaryVector {
+func NewSimBetSummaryVector(betweenness float64, similarities map[bundle.EndpointID]uint64) *SimBetSummaryVector {
 	summaryVector := SimBetSummaryVector{
 		Betweenness:  betweenness,
 		Similarities: similarities,
@@ -528,7 +555,7 @@ func (summaryVector *SimBetSummaryVector) MarshalCbor(w io.Writer) error {
 		if err := cboring.Marshal(&peerID, w); err != nil {
 			return err
 		}
-		if err := cboring.WriteFloat64(similarity, w); err != nil {
+		if err := cboring.WriteUInt(similarity, w); err != nil {
 			return err
 		}
 	}
@@ -555,13 +582,13 @@ func (summaryVector *SimBetSummaryVector) UnmarshalCbor(r io.Reader) error {
 		return err
 	}
 
-	similarities := make(map[bundle.EndpointID]float64, simLen)
+	similarities := make(map[bundle.EndpointID]uint64, simLen)
 	for ; simLen > 0; simLen-- {
 		peerID := bundle.EndpointID{}
 		if err := cboring.Unmarshal(&peerID, r); err != nil {
 			return err
 		}
-		similarity, err := cboring.ReadFloat64(r)
+		similarity, err := cboring.ReadUInt(r)
 		if err != nil {
 			return err
 		}
