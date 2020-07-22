@@ -2,13 +2,14 @@ package core
 
 import (
 	"fmt"
+	"io"
+	"sync"
+
 	"github.com/dtn7/cboring"
 	"github.com/dtn7/dtn7-go/bundle"
 	"github.com/dtn7/dtn7-go/cla"
 	log "github.com/sirupsen/logrus"
 	"gonum.org/v1/gonum/mat"
-	"io"
-	"sync"
 )
 
 type SimBetConfig struct {
@@ -131,7 +132,19 @@ func (simBet *SimBet) NotifyIncoming(bp BundlePack) {
 		return
 	}
 
-	bndlItem.Properties["destination"] = bndl.PrimaryBlock.Destination
+	bndlItem.Properties["routing/simbet/destination"] = bndl.PrimaryBlock.Destination
+
+	// Check if we got a PreviousNodeBlock and extract its EndpointID
+	var prevNode bundle.EndpointID
+	if pnBlock, err := bndl.ExtensionBlock(bundle.ExtBlockTypePreviousNodeBlock); err == nil {
+		prevNode = pnBlock.Value.(*bundle.PreviousNodeBlock).Endpoint()
+		sentEids, ok := bndlItem.Properties["routing/simbet/sent"].([]bundle.EndpointID)
+		if !ok {
+			bndlItem.Properties["routing/simbet/sent"] = []bundle.EndpointID{prevNode}
+		} else {
+			bndlItem.Properties["routing/simbet/sent"] = append(sentEids, prevNode)
+		}
+	}
 
 	if err = simBet.c.store.Update(bndlItem); err != nil {
 		log.WithFields(log.Fields{
@@ -175,13 +188,63 @@ func (simBet *SimBet) Info(fields log.Fields, message string) {
 }
 
 func (simBet *SimBet) DispatchingAllowed(bp BundlePack) bool {
-	// TODO: Dummy Implementation
-	return true
+	bi, err := simBet.c.store.QueryId(bp.Id)
+	if err != nil {
+		simBet.Warn(log.Fields{
+			"bundle": bp.ID(),
+			"error":  err.Error(),
+		}, "Unable to get BundleItem")
+		return false
+	}
+
+	filteredClas, _ := filterCLAs(bi, simBet.c.claManager.Sender(), "simbet")
+
+	return len(filteredClas) > 0
 }
 
 func (simBet *SimBet) SenderForBundle(bp BundlePack) (sender []cla.ConvergenceSender, delete bool) {
-	// TODO: Dummy Implementation
-	return nil, false
+	bi, err := simBet.c.store.QueryId(bp.Id)
+	if err != nil {
+		simBet.Warn(log.Fields{
+			"bundle": bp.ID(),
+			"error":  err.Error(),
+		}, "Unable to get BundleItem")
+		return nil, false
+	}
+
+	destination, ok := bi.Properties["routing/simbet/destination"].(bundle.EndpointID)
+	if !ok {
+		simBet.Warn(log.Fields{
+			"bundle":      bp.ID(),
+			"destination": bi.Properties["routing/simbet/destination"],
+		}, "Unable to cast bundle destination")
+		return nil, false
+	}
+
+	validPeers, _ := filterCLAs(bi, simBet.c.claManager.Sender(), "simbet")
+
+	ownID := simBet.c.NodeId
+	for _, peer := range validPeers {
+		peerID := peer.GetPeerEndpointID()
+		ownUtility := simBet.computeSimBetUtil(ownID, peerID, destination)
+		peerUtility := simBet.computeSimBetUtil(peerID, ownID, destination)
+		if peerUtility > ownUtility {
+			sender = append(sender, peer)
+		}
+	}
+
+	sender, sent := filterCLAs(bi, sender, "simbet")
+
+	bi.Properties["routing/simbet/sent"] = sent
+	if err := simBet.c.store.Update(bi); err != nil {
+		simBet.Warn(log.Fields{
+			"error": err,
+		}, "Updating BundleItem failed")
+		return nil, false
+	}
+
+	delete = true
+	return
 }
 
 func (simBet *SimBet) ReportFailure(bp BundlePack, sender cla.ConvergenceSender) {
@@ -216,6 +279,7 @@ func (simBet *SimBet) ReportPeerAppeared(peer cla.Convergence) {
 	}).Debug("Peer added to adjacencies")
 
 	simBet.sendAdjacencies(peerID)
+	simBet.sendSummaryVector(peerID)
 }
 
 func (simBet *SimBet) ReportPeerDisappeared(peer cla.Convergence) {
@@ -276,7 +340,7 @@ func (simBet *SimBet) sendSummaryVector(peerID bundle.EndpointID) {
 	simBet.dataMutex.RLock()
 	for i := 0; i < nBndl; i++ {
 		bndlItem := pendingBundles[i]
-		destination, ok := bndlItem.Properties["destination"].(bundle.EndpointID)
+		destination, ok := bndlItem.Properties["routing/simbet/destination"].(bundle.EndpointID)
 		if !ok {
 			log.WithFields(log.Fields{
 				"bundle": bndlItem.Id,
@@ -301,11 +365,11 @@ func (simBet *SimBet) sendSummaryVector(peerID bundle.EndpointID) {
 func (simBet *SimBet) updateSimilarity() {
 	simBet.dataMutex.Lock()
 	defer simBet.dataMutex.Unlock()
-	for node, _ := range simBet.nodeIndex {
+	for node := range simBet.nodeIndex {
 		var similarity uint64
 		similarity = 0
 		peerAdjacencies := adjacencySliceToMap(simBet.peerAdjacencies[node])
-		for adjacentNode, _ := range simBet.adjacencies {
+		for adjacentNode := range simBet.adjacencies {
 			adjacentToSelf := simBet.adjacencies[adjacentNode]
 			adjacentToPeer := peerAdjacencies[adjacentNode]
 			if adjacentToSelf && adjacentToPeer {
@@ -361,7 +425,7 @@ func (simBet *SimBet) updateBetweenness() {
 
 	xDim, yDim := aSquared.Dims()
 	ones := make([]float64, xDim*yDim)
-	for i, _ := range ones {
+	for i := range ones {
 		ones[i] = 1.0
 	}
 	onesMatrix := mat.NewDense(xDim, yDim, ones)
@@ -393,17 +457,44 @@ func (simBet *SimBet) updateBetweenness() {
 	simBet.dataMutex.Unlock()
 }
 
-func (simBet *SimBet) computeSimUtil(otherNode bundle.EndpointID, destination bundle.EndpointID) float64 {
-	similarity := float64(simBet.similarities[destination])
-	return similarity / (similarity + float64(simBet.peerSimilarities[otherNode][destination]))
+func (simBet *SimBet) computeSimUtil(firstNode bundle.EndpointID, otherNode bundle.EndpointID, destination bundle.EndpointID) float64 {
+	var firstSimilarity float64
+	if firstNode == simBet.c.NodeId {
+		firstSimilarity = float64(simBet.similarities[destination])
+	} else {
+		firstSimilarity = float64(simBet.peerSimilarities[firstNode][destination])
+	}
+
+	var otherSimilarity float64
+	if otherNode == simBet.c.NodeId {
+		otherSimilarity = float64(simBet.similarities[destination])
+	} else {
+		otherSimilarity = float64(simBet.peerSimilarities[firstNode][destination])
+	}
+
+	return firstSimilarity / (firstSimilarity + otherSimilarity)
 }
 
-func (simBet *SimBet) computeBetUtil(otherNode bundle.EndpointID) float64 {
-	return simBet.betweenness / (simBet.betweenness + simBet.peerBetweenness[otherNode])
+func (simBet *SimBet) computeBetUtil(firstNode bundle.EndpointID, otherNode bundle.EndpointID) float64 {
+	var firstBetweenness float64
+	if firstNode == simBet.c.NodeId {
+		firstBetweenness = simBet.betweenness
+	} else {
+		firstBetweenness = simBet.peerBetweenness[firstNode]
+	}
+
+	var otherBetweenness float64
+	if otherNode == simBet.c.NodeId {
+		otherBetweenness = simBet.betweenness
+	} else {
+		otherBetweenness = simBet.peerBetweenness[otherNode]
+	}
+
+	return firstBetweenness / (firstBetweenness + otherBetweenness)
 }
 
-func (simBet *SimBet) computeSimBetUtil(otherNode bundle.EndpointID, desitnation bundle.EndpointID) float64 {
-	return (simBet.config.Alpha * simBet.computeSimUtil(otherNode, desitnation)) + (simBet.config.Beta * simBet.computeBetUtil(otherNode))
+func (simBet *SimBet) computeSimBetUtil(firstNode bundle.EndpointID, otherNode bundle.EndpointID, desitnation bundle.EndpointID) float64 {
+	return (simBet.config.Alpha * simBet.computeSimUtil(firstNode, otherNode, desitnation)) + (simBet.config.Beta * simBet.computeBetUtil(firstNode, otherNode))
 }
 
 // adjacencyMapToSlice transforms the map-structure which is used to track adjacencies efficiently
@@ -479,7 +570,8 @@ func (adjacencyBlock *AdjacencyBlock) MarshalCbor(w io.Writer) error {
 		return err
 	}
 
-	for _, peerID := range *adjacencyBlock {
+	for i := range *adjacencyBlock {
+		peerID := (*adjacencyBlock)[i]
 		if err := cboring.Marshal(&peerID, w); err != nil {
 			return err
 		}

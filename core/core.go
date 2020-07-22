@@ -75,7 +75,7 @@ func NewCore(storePath string, nodeId bundle.EndpointID, inspectAllBundles bool,
 	c.claManager = cla.NewManager()
 
 	c.idKeeper = NewIdKeeper()
-	
+
 	if ra, raErr := routingConf.RoutingAlgorithm(c); raErr != nil {
 		return nil, raErr
 	} else {
