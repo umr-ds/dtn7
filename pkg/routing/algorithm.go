@@ -65,6 +65,8 @@ type RoutingConf struct {
 
 	// SensorNetworkMuleConfig contains data to initialize "sensor-mule"
 	SensorMuleConf SensorNetworkMuleConfig `toml:"sensor-mule-conf"`
+
+	ContextConf ContextConfig
 }
 
 // RoutingAlgorithm from its configuration.
@@ -93,6 +95,9 @@ func (routingConf RoutingConf) RoutingAlgorithm(c *Core) (algo Algorithm, err er
 		} else {
 			algo = NewSensorNetworkMuleRouting(muleAlgo, sensorNode)
 		}
+
+	case "context":
+		algo = NewContextRouting(c, routingConf.ContextConf)
 
 	default:
 		err = fmt.Errorf("unknown routing algorithm %s", routingConf.Algorithm)

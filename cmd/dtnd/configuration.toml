@@ -68,7 +68,7 @@ rest = true
 # blocks are usable.
 [[listen]]
 # Protocol to use, one of tcpclv4, tcpclv4-ws, mtcp, bbc.
-protocol = "tcpclv4"
+protocol = "mtcp"
 
 # Address to bind this CLA to.
 endpoint = ":4556"
@@ -110,8 +110,8 @@ endpoint = ":4556"
 
 # Specify routing algorithm
 [routing]
-# One of  "epidemic", "spray", "binary_sparay", "dtlsr", "prophet", "sensor-mule"
-algorithm = "epidemic"
+# One of  "epidemic", "spray", "binary_sparay", "dtlsr", "prophet", "sensor-mule", "context
+algorithm = "context"
 
 
 # Config for spray routing
@@ -150,3 +150,8 @@ algorithm = "epidemic"
 # # In this example, the underlying algorithm is the simple epidemic routing.
 # [routing.sensor-mule-conf.routing]
 # algorithm = "epidemic"
+
+# config for context routing
+[routing.contextconf]
+scriptpath = "context_complex.js"
+listenaddress = "127.0.0.1:35043"

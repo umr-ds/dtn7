@@ -7,9 +7,12 @@ require (
 	github.com/dgraph-io/badger v1.6.2 // indirect
 	github.com/dgraph-io/ristretto v0.0.3 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
+	github.com/dlclark/regexp2 v1.4.0 // indirect
+	github.com/dop251/goja v0.0.0-20210126164150-f5884268f0c0
 	github.com/dtn7/cboring v0.1.5
 	github.com/dtn7/rf95modem-go v0.3.1
 	github.com/fsnotify/fsnotify v1.4.9
+	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/golang/protobuf v1.4.3 // indirect
 	github.com/google/go-cmp v0.5.3 // indirect
 	github.com/gorilla/mux v1.8.0
@@ -31,4 +34,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
 
-go 1.13
+go 1.15

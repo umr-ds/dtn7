@@ -1,4 +1,5 @@
-// SPDX-FileCopyrightText: 2019, 2020, 2021 Alvar Penning
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+// SPDX-FileCopyrightText: 2021 Markus Sommer
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -9,6 +10,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // BundleBuilder is a simple framework to create bundles by method chaining.
@@ -74,6 +77,14 @@ func (bldr *BundleBuilder) Build() (bndl Bundle, err error) {
 	if bldr.primary.SourceNode == (EndpointID{}) || bldr.primary.Destination == (EndpointID{}) {
 		err = fmt.Errorf("both Source and Destination must be set")
 		return
+	}
+
+	// Calculate mandatory CRC for the PrimaryBlock.
+	// Do NOT alter the PrimaryBlock after setting its CRC.
+	if bldr.crcType == CRCNo {
+		bldr.primary.SetCRCType(CRC32)
+	} else {
+		bldr.primary.SetCRCType(bldr.crcType)
 	}
 
 	bndl, err = NewBundle(bldr.primary, bldr.canonicals)
@@ -425,6 +436,33 @@ func (bldr *BundleBuilder) PreviousNodeBlock(args ...interface{}) *BundleBuilder
 	return bldr.Canonical(NewPreviousNodeBlock(eid), flags)
 }
 
+func (bldr *BundleBuilder) ContextBlock(args ...interface{}) *BundleBuilder {
+	if bldr.err != nil {
+		return bldr
+	}
+
+	c, ok := args[0].(map[string]interface{})
+	if !ok {
+		bldr.err = fmt.Errorf("did not supply valid context data")
+	}
+
+	// I don't know how to do this any better... conversion don't work either...
+	// TODO: find a better way to do this
+	context := make(map[string]string)
+	for k, v := range c {
+		sv, ok := v.(string)
+		if !ok {
+			log.WithFields(log.Fields{
+				"value": v,
+			}).Warn("Value is not a string")
+			bldr.err = fmt.Errorf("did not supply valid context data")
+		}
+		context[k] = sv
+	}
+
+	return bldr.Canonical(append([]interface{}{NewBundleContextBlock(context)}, args[1:]...)...)
+}
+
 // AdministrativeRecord configures an AdministrativeRecord as the Payload. Furthermore, the AdministrativeRecordPayload
 // BundleControlFlags is set.
 func (bldr *BundleBuilder) AdministrativeRecord(ar AdministrativeRecord) *BundleBuilder {
@@ -502,6 +540,7 @@ func (bldr *BundleBuilder) StatusReport(args ...interface{}) *BundleBuilder {
 //     "creation_timestamp_now": true,
 //     "lifetime":               "24h",
 //     "payload_block":          "hello world",
+//     "context_block":          ""
 //   }
 //   b, err := BuildFromMap(args)
 //
@@ -570,6 +609,9 @@ func BuildFromMap(m map[string]interface{}) (bndl Bundle, err error) {
 		// func (bldr *BundleBuilder) PreviousNodeBlock(args ...interface{}) *BundleBuilder
 		case "previous_node_block":
 			bldr.PreviousNodeBlock(args)
+
+		case "context_block":
+			bldr.ContextBlock(args)
 
 		default:
 			err = fmt.Errorf("method %s is either not implemented or not existing", method)
