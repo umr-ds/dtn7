@@ -257,9 +257,20 @@ func (ra *RestAgent) handleBuild(w http.ResponseWriter, r *http.Request) {
 		}).Warn(msg)
 		buildResponse.Error = msg
 	} else {
+		payload := buildRequest.Args["payload_block"]
+		var payloadLength int
+		if sPayload, ok := payload.(string); ok {
+			payloadLength = len(sPayload)
+		} else if pPayload, ok := payload.([]byte); ok {
+			payloadLength = len(pPayload)
+		} else {
+			payloadLength = 0
+		}
+
 		log.WithFields(log.Fields{
 			"uuid":   buildRequest.UUID,
 			"bundle": b.ID().String(),
+			"size":   payloadLength,
 		}).Info("REST client sent bundle")
 		ra.sender <- BundleMessage{Bundle: b}
 	}

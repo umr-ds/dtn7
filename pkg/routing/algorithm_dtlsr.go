@@ -148,6 +148,7 @@ func (dtlsr *DTLSR) NotifyNewBundle(bp BundleDescriptor) {
 
 	if metaDataBlock, err := bp.MustBundle().ExtensionBlock(bpv7.ExtBlockTypeDTLSRBlock); err == nil {
 		log.WithFields(log.Fields{
+			"bundle": bp.ID(),
 			"peer": bp.MustBundle().PrimaryBlock.SourceNode,
 		}).Debug("Received metadata")
 

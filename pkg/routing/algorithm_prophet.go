@@ -171,6 +171,7 @@ func (prophet *Prophet) NotifyNewBundle(bp BundleDescriptor) {
 
 	if metaDataBlock, err := bp.MustBundle().ExtensionBlock(bpv7.ExtBlockTypeProphetBlock); err == nil {
 		log.WithFields(log.Fields{
+			"bundle": bp.ID(),
 			"source": bp.MustBundle().PrimaryBlock.SourceNode,
 		}).Debug("Received metadata")
 
