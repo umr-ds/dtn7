@@ -142,6 +142,10 @@ func NewDTLSR(c *Core, config DTLSRConfig) *DTLSR {
 }
 
 func (dtlsr *DTLSR) NotifyNewBundle(bp BundleDescriptor) {
+	log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Incoming bundle")
+
 	if metaDataBlock, err := bp.MustBundle().ExtensionBlock(bpv7.ExtBlockTypeDTLSRBlock); err == nil {
 		log.WithFields(log.Fields{
 			"peer": bp.MustBundle().PrimaryBlock.SourceNode,
@@ -201,6 +205,11 @@ func (dtlsr *DTLSR) NotifyNewBundle(bp BundleDescriptor) {
 	if pnBlock, err := bndl.ExtensionBlock(bpv7.ExtBlockTypePreviousNodeBlock); err == nil {
 		prevNode := pnBlock.Value.(*bpv7.PreviousNodeBlock).Endpoint()
 
+		log.WithFields(log.Fields{
+			"bundle": bndl.ID(),
+			"src":    prevNode,
+		}).Info("Received bundle from peer")
+
 		sentEids, ok := bundleItem.Properties["routing/dtlsr/sent"].([]bpv7.EndpointID)
 		if !ok {
 			sentEids = make([]bpv7.EndpointID, 0)
@@ -220,6 +229,14 @@ func (_ *DTLSR) ReportFailure(_ BundleDescriptor, _ cla.ConvergenceSender) {
 }
 
 func (dtlsr *DTLSR) SenderForBundle(bp BundleDescriptor) (sender []cla.ConvergenceSender, delete bool) {
+	log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Starting routing decision")
+
+	defer log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Routing decision finished")
+
 	delete = false
 
 	bndl, err := bp.Bundle()

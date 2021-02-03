@@ -30,6 +30,10 @@ func NewEpidemicRouting(c *Core) *EpidemicRouting {
 //
 // In our case, the PreviousNodeBlock will be inspected.
 func (er *EpidemicRouting) NotifyNewBundle(bp BundleDescriptor) {
+	log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Incoming bundle")
+
 	bi, biErr := er.c.store.QueryId(bp.Id)
 	if biErr != nil {
 		log.WithFields(log.Fields{
@@ -53,6 +57,11 @@ func (er *EpidemicRouting) NotifyNewBundle(bp BundleDescriptor) {
 	var prevNode bpv7.EndpointID
 	if pnBlock, err := bndl.ExtensionBlock(bpv7.ExtBlockTypePreviousNodeBlock); err == nil {
 		prevNode = pnBlock.Value.(*bpv7.PreviousNodeBlock).Endpoint()
+
+		log.WithFields(log.Fields{
+			"bundle": bndl.ID(),
+			"src":    prevNode,
+		}).Info("Received bundle from peer")
 	} else {
 		return
 	}
@@ -151,6 +160,14 @@ func (er *EpidemicRouting) DispatchingAllowed(bp BundleDescriptor) bool {
 
 // SenderForBundle returns the Core's ConvergenceSenders.
 func (er *EpidemicRouting) SenderForBundle(bp BundleDescriptor) (css []cla.ConvergenceSender, del bool) {
+	log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Starting routing decision")
+
+	defer log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Routing decision finished")
+
 	return er.clasForBundle(bp, true)
 }
 

@@ -425,9 +425,13 @@ func (contextRouting *ContextRouting) DispatchingAllowed(_ BundleDescriptor) boo
 }
 
 func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (sender []cla.ConvergenceSender, delete bool) {
-	contextRouting.Debug(log.Fields{
+	log.WithFields(log.Fields{
 		"bundle": bp.ID(),
-	}, "Starting routing decision")
+	}).Debug("Starting routing decision")
+
+	defer log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Routing decision finished")
 
 	bndl, err := bp.Bundle()
 	if err != nil {
@@ -586,11 +590,6 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 			"error":  err,
 		}, "Updating BundleItem failed")
 	}
-
-	contextRouting.Debug(log.Fields{
-		"bundle": bp.ID(),
-		"peers":  filtered,
-	}, "Routing decision finished")
 
 	return filtered, false
 }

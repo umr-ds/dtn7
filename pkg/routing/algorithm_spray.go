@@ -127,6 +127,14 @@ func (_ *SprayAndWait) DispatchingAllowed(_ BundleDescriptor) bool {
 // The bundle's originator will distribute Multiplicity copies amongst its peers
 // Forwarders will only every deliver the bundle to its final destination
 func (sw *SprayAndWait) SenderForBundle(bp BundleDescriptor) (css []cla.ConvergenceSender, del bool) {
+	log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Starting routing decision")
+
+	defer log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Routing decision finished")
+
 	sw.dataMutex.RLock()
 	metadata, ok := sw.bundleData[bp.Id]
 	sw.dataMutex.RUnlock()
@@ -268,6 +276,10 @@ func (bs *BinarySpray) GarbageCollect() {
 // If yes, then we initialise the remaining Copies to Multiplicity
 // If not we attempt to ready the routing-metadata-block end get the remaining copies
 func (bs *BinarySpray) NotifyNewBundle(bp BundleDescriptor) {
+	log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Incoming bundle")
+
 	if metadataBlock, err := bp.MustBundle().ExtensionBlock(bpv7.ExtBlockTypeBinarySprayBlock); err == nil {
 		binarySprayBlock := metadataBlock.Value.(*bpv7.BinarySprayBlock)
 		metadata := sprayMetaData{
@@ -277,7 +289,12 @@ func (bs *BinarySpray) NotifyNewBundle(bp BundleDescriptor) {
 
 		// if the bundle has a PreviousNodeBlock, add it to the list of nodes which we know to have the bundle
 		if pnBlock, err := bp.MustBundle().ExtensionBlock(bpv7.ExtBlockTypePreviousNodeBlock); err == nil {
-			metadata.sent = append(metadata.sent, pnBlock.Value.(*bpv7.PreviousNodeBlock).Endpoint())
+			prevNode := pnBlock.Value.(*bpv7.PreviousNodeBlock).Endpoint()
+			metadata.sent = append(metadata.sent, prevNode)
+			log.WithFields(log.Fields{
+				"bundle": bp.ID(),
+				"src":    prevNode,
+			}).Info("Received bundle from peer")
 		}
 
 		bs.dataMutex.Lock()
@@ -313,6 +330,14 @@ func (_ *BinarySpray) DispatchingAllowed(_ BundleDescriptor) bool {
 // If a node has more than 1 copy left it will send floor(copies/2) to the peer
 // and keep roof(copies/2) for itself
 func (bs *BinarySpray) SenderForBundle(bp BundleDescriptor) (css []cla.ConvergenceSender, del bool) {
+	log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Starting routing decision")
+
+	defer log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Routing decision finished")
+
 	bs.dataMutex.RLock()
 	metadata, ok := bs.bundleData[bp.Id]
 	bs.dataMutex.RUnlock()

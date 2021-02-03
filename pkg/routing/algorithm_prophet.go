@@ -165,6 +165,10 @@ func (prophet *Prophet) sendMetadata(destination bpv7.EndpointID) {
 }
 
 func (prophet *Prophet) NotifyNewBundle(bp BundleDescriptor) {
+	log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Incoming bundle")
+
 	if metaDataBlock, err := bp.MustBundle().ExtensionBlock(bpv7.ExtBlockTypeProphetBlock); err == nil {
 		log.WithFields(log.Fields{
 			"source": bp.MustBundle().PrimaryBlock.SourceNode,
@@ -233,6 +237,11 @@ func (prophet *Prophet) NotifyNewBundle(bp BundleDescriptor) {
 	var prevNode bpv7.EndpointID
 	if pnBlock, err := bndl.ExtensionBlock(bpv7.ExtBlockTypePreviousNodeBlock); err == nil {
 		prevNode = pnBlock.Value.(*bpv7.PreviousNodeBlock).Endpoint()
+
+		log.WithFields(log.Fields{
+			"bundle": bndl.ID(),
+			"src":    prevNode,
+		}).Info("Received bundle from peer")
 	} else {
 		return
 	}
@@ -268,6 +277,14 @@ func (prophet *Prophet) DispatchingAllowed(_ BundleDescriptor) bool {
 }
 
 func (prophet *Prophet) SenderForBundle(bp BundleDescriptor) (sender []cla.ConvergenceSender, delete bool) {
+	log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Starting routing decision")
+
+	defer log.WithFields(log.Fields{
+		"bundle": bp.ID(),
+	}).Debug("Routing decision finished")
+
 	bndl, err := bp.Bundle()
 	if err != nil {
 		log.WithFields(log.Fields{
