@@ -57,7 +57,7 @@ func (manager *AgentManager) handler() {
 func (manager *AgentManager) handleMessage(msg agent.Message) {
 	switch msg := msg.(type) {
 	case agent.BundleMessage:
-		log.WithField("bundle", msg.Bundle).Debug("AgentManager received Bundle from client")
+		log.WithField("bundle", msg.Bundle.ID()).Debug("AgentManager received Bundle from client")
 		manager.core.SendBundle(&msg.Bundle)
 
 	// TODO
@@ -97,7 +97,7 @@ func (manager *AgentManager) Deliver(descriptor BundleDescriptor) error {
 		return err
 	}
 
-	log.WithField("bundle", b).Debug("AgentManager delivers Bundle to client")
+	log.WithField("bundle", b.ID()).Debug("AgentManager delivers Bundle to client")
 	manager.mux.MessageReceiver() <- agent.BundleMessage{Bundle: *b}
 	return nil
 }
