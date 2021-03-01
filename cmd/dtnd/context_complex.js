@@ -8,36 +8,6 @@ function vectorAngle(xa, ya, xb, yb) {
 
 function sensorToSensor(peerID) {
     loggingFunc("sensorToSensor");
-    /*
-    // check if peer accepts this type of data
-    var bundleType = bundleContext["type"];
-    var acceptedTypes = JSON.parse(peerContext[peerID]["accepted_types"]);
-    if (!(acceptedTypes.includes(bundleType))) {
-        return false;
-    }
-     */
-
-    /*
-    // check peer's battery
-    var peerBattery = JSON.parse(peerContext[peerID]["battery"]);
-    var batteryLevel = peerBattery.level_abs;
-    var lowThreshold = peerBattery.low_threshold;
-    var peerBatteryLow = batteryLevel < lowThreshold;
-    if (peerBatteryLow) {
-        return false;
-    }
-     */
-
-    /*
-    // check own battery
-    var ownBattery = JSON.parse(context["battery"]);
-    batteryLevel = ownBattery.level_abs;
-    lowThreshold = ownBattery.low_threshold;
-    var ownBatteryLow = batteryLevel < lowThreshold;
-    if (ownBatteryLow && !peerBatteryLow) {
-        return true;
-    }
-     */
 
     var distanceJSON = context["backbone"];
     loggingFunc("Own distance: " + distanceJSON);
@@ -60,35 +30,13 @@ function sensorToSensor(peerID) {
     return peerConnectedness > ownConnectedness;
 }
 
-function sensorToBackbone(peerID) {
-    var peerCongested = JSON.parse(peerContext[peerID]["congested"]);
-    return !peerCongested;
+function sensorToBackbone() {
+    loggingFunc("sensorToBackbone");
+    return true;
 }
 
 function sensorToGuest(peerID) {
     loggingFunc("sensorToGuest");
-    /*
-    var peerSubscriptions = JSON.parse(peerContext[peerID]["subscriptions"]);
-    var bundleChannel = JSON.parse(bundleConext["channel"]);
-    if (peerSubscriptions.includes(bundleChannel)) {
-        return true;
-    }
-     */
-
-    /*
-    var peerMule = JSON.parse(peerContext[peerID]["mule"]);
-    if (!peerMule) {
-        return false
-    }
-     */
-
-    /*
-    var bundleType = bundleContext["type"];
-    var acceptedTypes = JSON.parse(peerContext[peerID]["accepted_types"]);
-    if (!acceptedTypes.contains(bundleType)) {
-        return false;
-    }
-     */
     loggingFunc("Bundle context: " + bundleContext);
     var bndlContext = JSON.parse(bundleContext);
 
@@ -101,66 +49,33 @@ function sensorToGuest(peerID) {
     return angle < 0.79
 }
 
-function backboneToSensor(peerID) {
+function backboneToSensor() {
+    loggingFunc("backboneToSensor");
     return false;
 }
 
-function backboneToBackbone(peerID) {
-    var peerCongested = JSON.parse(peerContext[peerID]["congested"]);
-    if (peerCongested) {
-        return false;
-    }
-
-    var congested = JSON.parse(context["congested"]);
-    if (congested) {
-        return true;
-    }
-
-    var speed = JSON.parse(context["uplink_speed"]);
-    var peerSpeed = JSON.parse(peerContext[peerID]["uplink_speed"]);
-    return peerSpeed > speed;
+function backboneToBackbone() {
+    loggingFunc("backboneToBackbone");
+    return false;
 }
 
-function backboneToGuest(peerID) {
-    var peerSubscriptions = JSON.parse(peerContext[peerID]["subscriptions"]);
-    var bundleChannel = JSON.parse(bundleConext["channel"]);
-    return peerSubscriptions.includes(bundleChannel);
+function backboneToGuest() {
+    loggingFunc("backboneToGuest");
+    return false;
 }
 
-function guestToSensor(peerID) {
+function guestToSensor() {
     loggingFunc("guestToSensor");
     return false;
 }
 
-function guestToBackbone(peerID) {
-    var peerCongested = JSON.parse(peerContext[peerID]["congested"]);
-    return !peerCongested;
+function guestToBackbone() {
+    loggingFunc("guestToBackbone");
+    return true;
 }
 
 function guestToGuest(peerID) {
     loggingFunc("guestToGuest");
-    /*
-    var peerSubscriptions = JSON.parse(peerContext[peerID]["subscriptions"]);
-    var bundleChannel = JSON.parse(bundleConext["channel"]);
-    if (peerSubscriptions.includes(bundleChannel)) {
-        return true;
-    }
-     */
-
-    /*
-    var peerMule = JSON.parse(peerContext[peerID]["mule"]);
-    if (!peerMule) {
-        return false
-    }
-     */
-
-    /*
-    var bundleType = bundleContext["type"];
-    var acceptedTypes = JSON.parse(peerContext[peerID]["accepted_types"]);
-    if (!acceptedTypes.contains(bundleType)) {
-        return false;
-    }
-     */
 
     var vectorJSON = context["movement"];
     loggingFunc("Own movement: " + vectorJSON);

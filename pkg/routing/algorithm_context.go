@@ -21,6 +21,7 @@ import (
 )
 
 const cadrBroadcastAddress = "dtn://routing/cadr/broadcast/"
+const logSemaphores = false
 
 type ContextConfig struct {
 	// ScriptPath is the path to the file which contains the javascript source for context evaluation
@@ -153,164 +154,180 @@ func (contextRouting *ContextRouting) Info(fields log.Fields, message string) {
 	}
 }
 
-func (contextRouting *ContextRouting) RLock(caller string, arg interface{}) {
-	/*if bid, ok := arg.(bundle.BundleID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-			"bundle": bid.String(),
-		}, "Attempting to gain lock")
-	} else if eid, ok := arg.(bundle.EndpointID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-			"peer":   eid.String(),
-		}, "Attempting to gain lock")
-	} else {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-		}, "Attempting to gain lock")
-	}*/
+func (contextRouting *ContextRouting) RLock(caller string, arg interface{}, logAction bool) {
+	if logAction {
+		if bid, ok := arg.(bpv7.BundleID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+				"bundle": bid.String(),
+			}, "Attempting to gain lock")
+		} else if eid, ok := arg.(bpv7.EndpointID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+				"peer":   eid.String(),
+			}, "Attempting to gain lock")
+		} else {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+			}, "Attempting to gain lock")
+		}
+	}
 	contextRouting.contextSemaphore.RLock()
-	/*if bid, ok := arg.(bundle.BundleID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-			"bundle": bid.String(),
-		}, "Gained lock")
-	} else if eid, ok := arg.(bundle.EndpointID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-			"peer":   eid.String(),
-		}, "Gained lock")
-	} else {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-		}, "Gained lock")
-	}*/
+	if logAction {
+		if bid, ok := arg.(bpv7.BundleID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+				"bundle": bid.String(),
+			}, "Gained lock")
+		} else if eid, ok := arg.(bpv7.EndpointID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+				"peer":   eid.String(),
+			}, "Gained lock")
+		} else {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+			}, "Gained lock")
+		}
+	}
 }
 
-func (contextRouting *ContextRouting) RUnlock(caller string, arg interface{}) {
-	/*if bid, ok := arg.(bundle.BundleID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-			"bundle": bid.String(),
-		}, "Releasing lock")
-	} else if eid, ok := arg.(bundle.EndpointID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-			"peer":   eid.String(),
-		}, "Releasing lock")
-	} else {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-		}, "Releasing lock")
-	}*/
+func (contextRouting *ContextRouting) RUnlock(caller string, arg interface{}, logAction bool) {
+	if logAction {
+		if bid, ok := arg.(bpv7.BundleID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+				"bundle": bid.String(),
+			}, "Releasing lock")
+		} else if eid, ok := arg.(bpv7.EndpointID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+				"peer":   eid.String(),
+			}, "Releasing lock")
+		} else {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+			}, "Releasing lock")
+		}
+	}
 	contextRouting.contextSemaphore.RUnlock()
-	/*if bid, ok := arg.(bundle.BundleID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-			"bundle": bid.String(),
-		}, "Released lock")
-	} else if eid, ok := arg.(bundle.EndpointID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-			"peer":   eid.String(),
-		}, "Released lock")
-	} else {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "read",
-		}, "Released lock")
-	}*/
+	if logAction {
+		if bid, ok := arg.(bpv7.BundleID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+				"bundle": bid.String(),
+			}, "Released lock")
+		} else if eid, ok := arg.(bpv7.EndpointID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+				"peer":   eid.String(),
+			}, "Released lock")
+		} else {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "read",
+			}, "Released lock")
+		}
+	}
 }
 
-func (contextRouting *ContextRouting) Lock(caller string, arg interface{}) {
-	/*if bid, ok := arg.(bundle.BundleID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-			"bundle": bid.String(),
-		}, "Attempting to gain lock")
-	} else if eid, ok := arg.(bundle.EndpointID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-			"peer":   eid.String(),
-		}, "Attempting to gain lock")
-	} else {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-		}, "Attempting to gain lock")
-	}*/
+func (contextRouting *ContextRouting) Lock(caller string, arg interface{}, logAction bool) {
+	if logAction {
+		if bid, ok := arg.(bpv7.BundleID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+				"bundle": bid.String(),
+			}, "Attempting to gain lock")
+		} else if eid, ok := arg.(bpv7.EndpointID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+				"peer":   eid.String(),
+			}, "Attempting to gain lock")
+		} else {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+			}, "Attempting to gain lock")
+		}
+	}
 	contextRouting.contextSemaphore.Lock()
-	/*if bid, ok := arg.(bundle.BundleID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-			"bundle": bid.String(),
-		}, "Gained lock")
-	} else if eid, ok := arg.(bundle.EndpointID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-			"peer":   eid.String(),
-		}, "Gained lock")
-	} else {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-		}, "Gained lock")
-	}*/
+	if logAction {
+		if bid, ok := arg.(bpv7.BundleID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+				"bundle": bid.String(),
+			}, "Gained lock")
+		} else if eid, ok := arg.(bpv7.EndpointID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+				"peer":   eid.String(),
+			}, "Gained lock")
+		} else {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+			}, "Gained lock")
+		}
+	}
 }
 
-func (contextRouting *ContextRouting) Unlock(caller string, arg interface{}) {
-	/*if bid, ok := arg.(bundle.BundleID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-			"bundle": bid.String(),
-		}, "Releasing lock")
-	} else if eid, ok := arg.(bundle.EndpointID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-			"peer":   eid.String(),
-		}, "Releasing lock")
-	} else {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-		}, "Releasing lock")
-	}*/
+func (contextRouting *ContextRouting) Unlock(caller string, arg interface{}, logAction bool) {
+	if logAction {
+		if bid, ok := arg.(bpv7.BundleID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+				"bundle": bid.String(),
+			}, "Releasing lock")
+		} else if eid, ok := arg.(bpv7.EndpointID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+				"peer":   eid.String(),
+			}, "Releasing lock")
+		} else {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+			}, "Releasing lock")
+		}
+	}
 	contextRouting.contextSemaphore.Unlock()
-	/*if bid, ok := arg.(bundle.BundleID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-			"bundle": bid.String(),
-		}, "Released lock")
-	} else if eid, ok := arg.(bundle.EndpointID); ok {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-			"peer":   eid.String(),
-		}, "Released lock")
-	} else {
-		contextRouting.Debug(log.Fields{
-			"method": caller,
-			"type":   "write",
-		}, "Released lock")
-	}*/
+	if logAction {
+		if bid, ok := arg.(bpv7.BundleID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+				"bundle": bid.String(),
+			}, "Released lock")
+		} else if eid, ok := arg.(bpv7.EndpointID); ok {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+				"peer":   eid.String(),
+			}, "Released lock")
+		} else {
+			contextRouting.Debug(log.Fields{
+				"method": caller,
+				"type":   "write",
+			}, "Released lock")
+		}
+	}
 }
 
 func (contextRouting *ContextRouting) NotifyNewBundle(bp BundleDescriptor) {
@@ -376,9 +393,9 @@ func (contextRouting *ContextRouting) NotifyNewBundle(bp BundleDescriptor) {
 					"context": context,
 				}, "Received peer context")
 
-				contextRouting.Lock("NotifyIncoming", bp.Id)
+				contextRouting.Lock("NotifyIncoming", bp.Id, logSemaphores)
 				contextRouting.peerContext[peerID.String()] = context
-				contextRouting.Unlock("NotifyIncoming", bp.Id)
+				contextRouting.Unlock("NotifyIncoming", bp.Id, logSemaphores)
 			}
 
 			bi.Properties["routing/context/type"] = contextBlock.Type
@@ -524,10 +541,10 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 	}
 	vm.Set("destination", destination)
 
-	contextRouting.RLock("SenderForBundle", bp.Id)
+	contextRouting.RLock("SenderForBundle", bp.Id, logSemaphores)
 	context := contextRouting.context
 	peerContext := contextRouting.peerContext
-	contextRouting.RUnlock("SenderForBundle", bp.Id)
+	contextRouting.RUnlock("SenderForBundle", bp.Id, logSemaphores)
 
 	validPeers, _ := filterCLAs(bi, contextRouting.c.claManager.Sender(), "context")
 	if len(validPeers) == 0 {
@@ -549,6 +566,9 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 		contextRouting.Warn(log.Fields{
 			"bundle": bp.ID(),
 			"error":  err,
+			"own_context": context,
+			"peerContext": peerContext,
+			"bundleContext": bundleContext,
 		}, "Error executing javascript")
 		return
 	}
@@ -619,9 +639,9 @@ func (contextRouting *ContextRouting) ReportPeerAppeared(peer cla.Convergence) {
 	}, "PeerID discovered")
 
 	// send the peer our context data
-	contextRouting.RLock("ReportPeerAppeared", peerID)
+	contextRouting.RLock("ReportPeerAppeared", peerID, logSemaphores)
 	context := contextRouting.context
-	contextRouting.RUnlock("ReportPeerAppeared", peerID)
+	contextRouting.RUnlock("ReportPeerAppeared", peerID, logSemaphores)
 
 	if len(context) == 0 {
 		// if there is no context to broadcast, then don't
@@ -629,9 +649,9 @@ func (contextRouting *ContextRouting) ReportPeerAppeared(peer cla.Convergence) {
 		return
 	}
 
-	contextRouting.Lock("ReportPeerAppeared", peerID)
+	contextRouting.Lock("ReportPeerAppeared", peerID, logSemaphores)
 	contextRouting.context["NodeID"] = contextRouting.c.NodeId.String()
-	contextRouting.Unlock("ReportPeerAppeared", peerID)
+	contextRouting.Unlock("ReportPeerAppeared", peerID, logSemaphores)
 
 	contextBlock := bpv7.NewNodeContextBlock(context)
 
@@ -700,10 +720,10 @@ func (contextRouting *ContextRouting) contextUpdateHandler(w http.ResponseWriter
 
 	body := string(bodyBinary)
 
-	contextRouting.Lock("contextUpdateHandler", "")
+	contextRouting.Lock("contextUpdateHandler", "", logSemaphores)
 	contextRouting.context[name] = body
 	contextRouting.contextModified = true
-	contextRouting.Unlock("contextUpdateHandler", "")
+	contextRouting.Unlock("contextUpdateHandler", "", logSemaphores)
 
 	w.WriteHeader(http.StatusAccepted)
 	contextRouting.Debug(log.Fields{
@@ -779,10 +799,10 @@ func (contextRouting *ContextRouting) storeSizeHandler(w http.ResponseWriter, _ 
 func (contextRouting *ContextRouting) broadcastCron() {
 	contextRouting.Debug(nil, "Running broadcast cron")
 
-	contextRouting.RLock("broadcastCron-1", "")
+	contextRouting.RLock("broadcastCron-1", "", logSemaphores)
 	context := contextRouting.context
 	contextModified := contextRouting.contextModified
-	contextRouting.RUnlock("broadcastCron-1", "")
+	contextRouting.RUnlock("broadcastCron-1", "", logSemaphores)
 
 	if len(context) == 0 {
 		// if there is no context to broadcast, then don't
@@ -796,9 +816,9 @@ func (contextRouting *ContextRouting) broadcastCron() {
 		return
 	}
 
-	contextRouting.Lock("broadcastCron-1", "")
+	contextRouting.Lock("broadcastCron-1", "", logSemaphores)
 	contextRouting.context["NodeID"] = contextRouting.c.NodeId.String()
-	contextRouting.Unlock("broadcastCron-1", "")
+	contextRouting.Unlock("broadcastCron-1", "", logSemaphores)
 
 	contextBlock := bpv7.NewNodeContextBlock(context)
 
@@ -814,9 +834,9 @@ func (contextRouting *ContextRouting) broadcastCron() {
 		return
 	}
 
-	contextRouting.Lock("broadcastCron-2", "")
+	contextRouting.Lock("broadcastCron-2", "", logSemaphores)
 	contextRouting.contextModified = false
-	contextRouting.Unlock("broadcastCron-2", "")
+	contextRouting.Unlock("broadcastCron-2", "", logSemaphores)
 }
 
 // senderNames converts a slice of ConvergenceSenders into a slice of strings

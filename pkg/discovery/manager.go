@@ -133,11 +133,13 @@ func (manager *Manager) handleDiscovery(announcement Announcement, addr string) 
 		return
 	}
 
+	/*
 	log.WithFields(log.Fields{
 		"discovery": manager,
 		"peer":      addr,
 		"message":   announcement,
 	}).Debug("Peer discovery received a message")
+	 */
 
 	var convergable cla.Convergable
 	switch announcement.Type {

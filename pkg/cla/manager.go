@@ -189,10 +189,12 @@ func (manager *Manager) registerConvergence(conv Convergence) {
 	if convElem, exists := manager.convs.Load(conv.Address()); exists {
 		ce = convElem.(*convergenceElem)
 		if ce.isActive() {
+			/*
 			log.WithFields(log.Fields{
 				"cla":     conv,
 				"address": conv.Address(),
 			}).Debug("CLA registration failed, because this address does already exists")
+			 */
 
 			return
 		}
