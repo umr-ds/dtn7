@@ -66,6 +66,7 @@ type discoveryConf struct {
 type agentsConfig struct {
 	Ping      string
 	Webserver agentsWebserverConfig
+	Chronicle agentsChronicleConfig
 }
 
 // agentsWebserverConfig describes the nested "Webserver" configuration for agents.
@@ -73,6 +74,10 @@ type agentsWebserverConfig struct {
 	Address   string
 	Websocket bool
 	Rest      bool
+}
+
+type agentsChronicleConfig struct {
+	Address string
 }
 
 // convergenceConf describes the Convergence-configuration block, used for
@@ -244,6 +249,16 @@ func parseAgents(conf agentsConfig) (agents []agent.ApplicationAgent, err error)
 		case <-time.After(100 * time.Millisecond):
 			break
 		}
+	}
+
+	if (conf.Chronicle != agentsChronicleConfig{}) {
+		if conf.Chronicle.Address == "" {
+			err = fmt.Errorf("address must not be empty")
+			return
+		}
+
+		ca := agent.NewChronicleAgent(conf.Chronicle.Address)
+		agents = append(agents, ca)
 	}
 
 	return
