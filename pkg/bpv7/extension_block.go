@@ -41,6 +41,9 @@ const (
 
 	// ExtBlockTypeSignatureBlock is the custom block type code for a SignatureBlock, bpv7/extension_block_signature.go
 	ExtBlockTypeSignatureBlock uint64 = 195
+
+	// ExtBlockTypeSignatureBlock is the custom block type code for a SignatureBlock, bpv7/extension_block_signature.go
+	ExtBlockTypeChronicleBlock uint64 = 261
 )
 
 // ExtensionBlock describes the block-type specific data of any Canonical Block.
