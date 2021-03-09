@@ -502,6 +502,7 @@ func (bldr *BundleBuilder) StatusReport(args ...interface{}) *BundleBuilder {
 //     "creation_timestamp_now": true,
 //     "lifetime":               "24h",
 //     "payload_block":          "hello world",
+//     "chronicle_block":        [1, "foobar"]
 //   }
 //   b, err := BuildFromMap(args)
 //
@@ -570,6 +571,14 @@ func BuildFromMap(m map[string]interface{}) (bndl Bundle, err error) {
 		// func (bldr *BundleBuilder) PreviousNodeBlock(args ...interface{}) *BundleBuilder
 		case "previous_node_block":
 			bldr.PreviousNodeBlock(args)
+
+		case "chronicle_block":
+			arguments, ok := args.([]interface{})
+			if !ok {
+				err = fmt.Errorf("data was not array")
+			} else {
+				bldr.ChronicleBlock(arguments)
+			}
 
 		default:
 			err = fmt.Errorf("method %s is either not implemented or not existing", method)

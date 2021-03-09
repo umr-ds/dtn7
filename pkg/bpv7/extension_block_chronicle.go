@@ -12,14 +12,14 @@ import (
 )
 
 const (
-	ChronicleCreateStream uint64 = iota
-	ChronicleInsertEvents
+	ChronicleCreateStream string = "create"
+	ChronicleInsertEvents string = "insert"
 )
 
 const chronicleBlockFields uint64 = 2
 
 type ChronicleBlock struct {
-	Operation  uint64
+	Operation  string
 	StreamName string
 }
 
@@ -48,7 +48,7 @@ func (cb *ChronicleBlock) MarshalCbor(w io.Writer) error {
 		return err
 	}
 
-	if err := cboring.WriteUInt(cb.Operation, w); err != nil {
+	if err := cboring.WriteTextString(cb.Operation, w); err != nil {
 		return err
 	}
 
@@ -66,7 +66,7 @@ func (cb *ChronicleBlock) UnmarshalCbor(r io.Reader) error {
 		return fmt.Errorf("expected %d fields, got %d", chronicleBlockFields, l)
 	}
 
-	if operation, err := cboring.ReadUInt(r); err != nil {
+	if operation, err := cboring.ReadTextString(r); err != nil {
 		return err
 	} else {
 		cb.Operation = operation
@@ -79,4 +79,34 @@ func (cb *ChronicleBlock) UnmarshalCbor(r io.Reader) error {
 	}
 
 	return nil
+}
+
+// ChronicleBlock builds a ChronicleBlock from an operation and a name
+func (bldr *BundleBuilder) ChronicleBlock(args []interface{}) *BundleBuilder {
+	if bldr.err != nil {
+		return bldr
+	}
+
+	operation, ok := args[0].(string)
+	if !ok {
+		bldr.err = fmt.Errorf("did not provide chronicle operation")
+		return bldr
+	}
+
+	streamName, ok := args[1].(string)
+	if !ok {
+		bldr.err = fmt.Errorf("did not provide stream name")
+	}
+
+	chronicleBlock := &ChronicleBlock{
+		Operation:  operation,
+		StreamName: streamName,
+	}
+
+	if err := chronicleBlock.CheckValid(); err != nil {
+		bldr.err = err
+		return bldr
+	}
+
+	return bldr.Canonical(chronicleBlock, DeleteBundle)
 }
