@@ -55,7 +55,7 @@ func NewCore(storePath string, nodeId bpv7.EndpointID, inspectAllBundles bool, r
 	gob.Register(bpv7.IpnEndpoint{})
 	gob.Register(map[Constraint]bool{})
 	gob.Register(time.Time{})
-	gob.Register(map[string]string{})
+	gob.Register(map[string]interface{}{})
 
 	if !nodeId.IsSingleton() {
 		return nil, fmt.Errorf("passed Node ID MUST be a singleton; %s is not", nodeId)

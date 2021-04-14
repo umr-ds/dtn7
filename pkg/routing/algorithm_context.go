@@ -36,11 +36,11 @@ type ContextRouting struct {
 	contextSemaphore sync.RWMutex
 	// context is this node's context information.
 	// The map key is the name of information, the value has to be a JSON-encoded string
-	context map[string]string
+	context map[string]interface{}
 	// contextModified is true is this node has had a context update since the last broadcast, false otherwise
 	contextModified bool
 	// contains peer context data, the keys are nodeIDs, and the values are the same construct as our own context map
-	peerContext map[string]map[string]string
+	peerContext map[string]map[string]interface{}
 	// javascript is a internal goja representation of the script that will be run for context evaluation
 	javascript *goja.Program
 	// address that broadcast bundles are sent to
@@ -51,9 +51,9 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 	log.Info("CONTEXT: Initialising Context Routing")
 	contextRouting := ContextRouting{
 		c:               c,
-		context:         make(map[string]string),
+		context:         make(map[string]interface{}),
 		contextModified: false,
-		peerContext:     make(map[string]map[string]string),
+		peerContext:     make(map[string]map[string]interface{}),
 	}
 
 	bAddress, err := bpv7.NewEndpointID(cadrBroadcastAddress)
@@ -107,7 +107,8 @@ func NewContextRouting(c *Core, config ContextConfig) *ContextRouting {
 	extensionBlockManager := bpv7.GetExtensionBlockManager()
 	if !extensionBlockManager.IsKnown(bpv7.ExtBlockTypeContextBlock) {
 		// since we already checked if the block type exists, this really shouldn't ever fail...
-		_ = extensionBlockManager.Register(bpv7.NewNodeContextBlock(contextRouting.context))
+		dummyblock, _ := bpv7.NewNodeContextBlock(contextRouting.context)
+		_ = extensionBlockManager.Register(dummyblock)
 	}
 
 	contextRouting.Info(nil, "Setting up cron jobs")
@@ -366,7 +367,14 @@ func (contextRouting *ContextRouting) NotifyNewBundle(bp BundleDescriptor) {
 				"bundle": bndl.ID(),
 			}, "Is normal bundle")
 
-			context := contextBlock.Context
+			context, err := contextBlock.GetContext()
+			if err != nil {
+				log.WithFields(log.Fields{
+					"error": err,
+					"context": string(contextBlock.Context),
+					"bundle": bp.ID(),
+				}).Error("Error unmarshaling bundle context")
+			}
 
 			contextRouting.Debug(log.Fields{
 				"bundle":  bndl.ID(),
@@ -376,7 +384,7 @@ func (contextRouting *ContextRouting) NotifyNewBundle(bp BundleDescriptor) {
 			bi.Properties["routing/context/type"] = contextBlock.Type
 			bi.Properties["routing/context/context"] = context
 			bi.Properties["routing/context/source"] = bndl.PrimaryBlock.SourceNode.String()
-			bi.Properties["routing/context/destination"] = bndl.PrimaryBlock.SourceNode.String()
+			bi.Properties["routing/context/destination"] = bndl.PrimaryBlock.Destination.String()
 		} else if contextBlock.Type == bpv7.NodeContext {
 			// this is a context bundle
 			contextRouting.Debug(log.Fields{
@@ -386,7 +394,13 @@ func (contextRouting *ContextRouting) NotifyNewBundle(bp BundleDescriptor) {
 			// if it's from us, do nothing
 			if bndl.PrimaryBlock.SourceNode != contextRouting.c.NodeId {
 				peerID := bndl.PrimaryBlock.SourceNode
-				context := contextBlock.Context
+				context, err := contextBlock.GetContext()
+				if err != nil {
+					log.WithFields(log.Fields{
+						"error": err,
+						"data": string(contextBlock.Context),
+					}).Error("Error unmarshalling context")
+				}
 
 				contextRouting.Debug(log.Fields{
 					"source":  peerID,
@@ -496,7 +510,7 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 	vm.Set("modifyBundleContext", contextRouting.modifyBundleContext)
 	vm.Set("bundleID", bp.ID())
 
-	bundleContext, ok := bi.Properties["routing/context/context"].(map[string]string)
+	bundleContext, ok := bi.Properties["routing/context/context"].(map[string]interface{})
 	if !ok {
 		contextRouting.Warn(log.Fields{
 			"bundle":  bndl.ID(),
@@ -650,12 +664,16 @@ func (contextRouting *ContextRouting) ReportPeerAppeared(peer cla.Convergence) {
 	}
 
 	contextRouting.Lock("ReportPeerAppeared", peerID, logSemaphores)
-	contextRouting.context["NodeID"] = contextRouting.c.NodeId.String()
+	contextRouting.context["NodeID"] = contextRouting.c.NodeId
 	contextRouting.Unlock("ReportPeerAppeared", peerID, logSemaphores)
 
-	contextBlock := bpv7.NewNodeContextBlock(context)
+	contextBlock, err := bpv7.NewNodeContextBlock(context)
+	if err != nil {
+		log.WithError(err).Error("Error marshaling own context")
+		return
+	}
 
-	err := sendMetadataBundle(contextRouting.c, contextRouting.c.NodeId, peerID, contextBlock)
+	err = sendMetadataBundle(contextRouting.c, contextRouting.c.NodeId, peerID, contextBlock)
 	if err != nil {
 		contextRouting.Warn(log.Fields{
 			"error": err,
@@ -669,13 +687,18 @@ func (contextRouting *ContextRouting) ReportPeerDisappeared(peer cla.Convergence
 
 // modifyBundleContext allows for the modification (overwriting) of a bundle's context block
 // To be passed to the script vm to enable full software defined routing
-func (contextRouting *ContextRouting) modifyBundleContext(bndl *bpv7.Bundle, context map[string]string) {
+func (contextRouting *ContextRouting) modifyBundleContext(bndl *bpv7.Bundle, context map[string]interface{}) {
 	_, err := bndl.ExtensionBlock(bpv7.ExtBlockTypeContextBlock)
 	if err != nil {
 		bndl.RemoveExtensionBlockByBlockNumber(bpv7.ExtBlockTypeContextBlock)
 	}
 
-	contextBlock := bpv7.NewBundleContextBlock(context)
+	contextBlock, err := bpv7.NewBundleContextBlock(context)
+	if err != nil {
+		log.WithError(err).Error("Error marshaling own context")
+		return
+	}
+
 	bndl.AddExtensionBlock(bpv7.NewCanonicalBlock(0, 0, contextBlock))
 }
 
@@ -707,6 +730,7 @@ func (contextRouting *ContextRouting) contextUpdateHandler(w http.ResponseWriter
 	if err != nil {
 		contextRouting.Info(log.Fields{
 			"error": err,
+			"context": string(bodyBinary),
 		}, "Received invalid context update")
 		w.WriteHeader(http.StatusBadRequest)
 		_, err = w.Write([]byte(err.Error()))
@@ -817,16 +841,20 @@ func (contextRouting *ContextRouting) broadcastCron() {
 	}
 
 	contextRouting.Lock("broadcastCron-1", "", logSemaphores)
-	contextRouting.context["NodeID"] = contextRouting.c.NodeId.String()
+	contextRouting.context["NodeID"] = contextRouting.c.NodeId
 	contextRouting.Unlock("broadcastCron-1", "", logSemaphores)
 
-	contextBlock := bpv7.NewNodeContextBlock(context)
+	contextBlock, err := bpv7.NewNodeContextBlock(context)
+	if err != nil {
+		log.WithError(err).Error("Error marshaling own context")
+		return
+	}
 
 	contextRouting.Debug(log.Fields{
 		"context": contextBlock,
 	}, "Broadcasting context")
 
-	err := sendMetadataBundle(contextRouting.c, contextRouting.c.NodeId, contextRouting.broadcastAddress, contextBlock)
+	err = sendMetadataBundle(contextRouting.c, contextRouting.c.NodeId, contextRouting.broadcastAddress, contextBlock)
 	if err != nil {
 		contextRouting.Warn(log.Fields{
 			"error": err,

@@ -1,5 +1,6 @@
 function vectorAngle(xa, ya, xb, yb) {
     loggingFunc("vectorAngle");
+    loggingFunc("xa: " + xa + ", xb: " + xb + ", ya: " + ya + ", yb: " + yb)
     var dot = (xa * xb) + (ya * yb);
     var magA = Math.sqrt(Math.pow(xa, 2) + Math.pow(ya, 2));
     var magB = Math.sqrt(Math.pow(xb, 2) + Math.pow(yb, 2));
@@ -9,24 +10,18 @@ function vectorAngle(xa, ya, xb, yb) {
 function sensorToSensor(peerID) {
     loggingFunc("sensorToSensor");
 
-    var distanceJSON = context["backbone"];
-    loggingFunc("Own distance: " + distanceJSON);
-    var ownDistance = JSON.parse(distanceJSON).distance;
-
-    var peerJSON = peerContext[peerID]["backbone"];
-    loggingFunc("Peer distance: " + peerJSON);
-    var peerDistance = JSON.parse(peerJSON).distance;
+    var ownDistance = JSON.parse(context["backbone"])["distance"];
+    loggingFunc("ownDistance: " + ownDistance)
+    var peerDistance = JSON.parse(peerContext[peerID]["backbone"])["distance"];
+    loggingFunc("peerDistance: " + peerDistance)
     if (peerDistance < ownDistance) {
         return true;
     }
 
-    var conJSON = context["connectedness"];
-    loggingFunc("Own connectedness: " + conJSON);
-    var ownConnectedness = JSON.parse(conJSON)["value"];
-
-    peerJSON = peerContext[peerID]["connectedness"];
-    loggingFunc("Peer connectedness: " + peerJSON);
-    var peerConnectedness = JSON.parse(peerJSON)["value"];
+    var ownConnectedness = JSON.parse(context["connectedness"])["value"];
+    loggingFunc("ownConnectedness: " + ownConnectedness)
+    var peerConnectedness = JSON.parse(peerContext[peerID]["connectedness"])["value"];
+    loggingFunc("peerConnectedness: " + peerConnectedness)
     return peerConnectedness > ownConnectedness;
 }
 
@@ -37,16 +32,7 @@ function sensorToBackbone() {
 
 function sensorToGuest(peerID) {
     loggingFunc("sensorToGuest");
-    loggingFunc("Bundle context: " + bundleContext);
-    var bndlContext = JSON.parse(bundleContext);
-
-    var vectorJSON = peerContext[peerID]["movement"];
-    loggingFunc("vectorJSON: " + vectorJSON);
-    var nodeVector = JSON.parse(vectorJSON);
-
-    var angle = vectorAngle(bndlContext.x_dest, bndlContext.y_dest, nodeVector.x, nodeVector.y);
-    loggingFunc("Angle: " + angle);
-    return angle < 0.79
+    return true;
 }
 
 function backboneToSensor() {
@@ -77,18 +63,8 @@ function guestToBackbone() {
 function guestToGuest(peerID) {
     loggingFunc("guestToGuest");
 
-    var vectorJSON = context["movement"];
-    loggingFunc("Own movement: " + vectorJSON);
-    var ownVector = JSON.parse(vectorJSON);
-
-    var peerJSON = peerContext[peerID]["movement"];
-    loggingFunc("Peer movement: " + peerJSON);
-    var peerVector = JSON.parse(peerJSON);
-    var angle = vectorAngle(ownVector.x, ownVector.y, peerVector.x, peerVector.y);
-    loggingFunc("Angle: " + angle);
-    if (angle > 0.79) {
-        return false;
-    }
+    var ownVector = JSON.parse(context["movement"]);
+    var peerVector = JSON.parse(peerContext[peerID]["movement"]);
 
     var ownSpeed = Math.sqrt(Math.pow(ownVector.x, 2) + Math.pow(ownVector.y, 2));
     loggingFunc("Own speed: " + ownSpeed);
@@ -98,6 +74,8 @@ function guestToGuest(peerID) {
 }
 
 loggingFunc("Peer List: " + peers);
+loggingFunc("Own context: " + JSON.stringify(context));
+loggingFunc("Aggregated Peer Context: " + JSON.stringify(peerContext))
 
 var senders = [];
 
@@ -106,23 +84,25 @@ for (var i = 0; i < len; i++) {
     var peer = peers[i];
     loggingFunc("Peer: " + peer);
 
-    var roleJSON = context["role"];
-    //loggingFunc("roleJSON: " + roleJSON);
-    var ownRole = JSON.parse(roleJSON)["node_type"];
-    loggingFunc("Own Role: " + ownRole);
-
     var thisPeer = peerContext[peer];
+    loggingFunc("Peer Context: " + JSON.stringify(thisPeer));
     if (thisPeer === undefined) {
         continue;
     }
 
-    var peerRole = JSON.parse(thisPeer["role"])["node_type"];
-    loggingFunc("Peer Role: " + peerRole);
+    var ownRole = JSON.parse(context["role"]);
+    var ownType = ownRole["node_type"];
+    loggingFunc("Own Type: " + ownType);
+
+
+    var peerRole = JSON.parse(thisPeer["role"]);
+    var peerType = peerRole["node_type"];
+    loggingFunc("Peer Type: " + peerType);
 
     var forward = false;
-    switch (ownRole) {
+    switch (ownType) {
         case "sensor":
-            switch (peerRole) {
+            switch (peerType) {
                 case "sensor":
                     forward = sensorToSensor(peer);
                     break;
@@ -142,7 +122,7 @@ for (var i = 0; i < len; i++) {
             forward = false;
             break;
         case "visitor":
-            switch (peerRole) {
+            switch (peerType) {
                 case "sensor":
                     forward = guestToSensor(peer);
                     break;

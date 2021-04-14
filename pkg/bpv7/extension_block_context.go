@@ -5,8 +5,10 @@
 package bpv7
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/dtn7/cboring"
+	log "github.com/sirupsen/logrus"
 	"io"
 )
 
@@ -17,23 +19,43 @@ const (
 
 type ContextBlock struct {
 	Type    uint64
-	Context map[string]string
+	Context []byte
 }
 
-func NewNodeContextBlock(context map[string]string) *ContextBlock {
+func NewNodeContextBlock(context map[string]interface{}) (*ContextBlock, error) {
+	marshalled, err := json.Marshal(context)
+	if err != nil {
+		return nil, err
+	}
+
 	contextBlock := ContextBlock{
 		Type:    NodeContext,
-		Context: context,
+		Context: marshalled,
 	}
-	return &contextBlock
+	return &contextBlock, nil
 }
 
-func NewBundleContextBlock(context map[string]string) *ContextBlock {
+func NewBundleContextBlock(context map[string]interface{}) (*ContextBlock, error) {
+	marshalled, err := json.Marshal(context)
+	if err != nil {
+		return nil, err
+	}
+
 	contextBlock := ContextBlock{
 		Type:    BundleContext,
-		Context: context,
+		Context: marshalled,
 	}
-	return &contextBlock
+	return &contextBlock, nil
+}
+
+func (contextBlock *ContextBlock) GetContext() (map[string]interface{}, error) {
+	var context map[string]interface{}
+	err := json.Unmarshal(contextBlock.Context, &context)
+	if err != nil {
+		return nil, err
+	}
+
+	return context, nil
 }
 
 func (contextBlock *ContextBlock) BlockTypeCode() uint64 {
@@ -48,6 +70,10 @@ func (contextBlock *ContextBlock) CheckValid() error {
 	return nil
 }
 
+func (contextBlock *ContextBlock) String() string {
+	return string(contextBlock.Context)
+}
+
 func (contextBlock *ContextBlock) MarshalCbor(w io.Writer) error {
 	err := cboring.WriteArrayLength(2, w)
 	if err != nil {
@@ -59,21 +85,9 @@ func (contextBlock *ContextBlock) MarshalCbor(w io.Writer) error {
 		return err
 	}
 
-	err = cboring.WriteMapPairLength(uint64(len(contextBlock.Context)), w)
+	err = cboring.WriteByteString(contextBlock.Context, w)
 	if err != nil {
 		return err
-	}
-
-	for key, value := range contextBlock.Context {
-		err = cboring.WriteTextString(key, w)
-		if err != nil {
-			return err
-		}
-
-		err = cboring.WriteTextString(value, w)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -94,28 +108,35 @@ func (contextBlock *ContextBlock) UnmarshalCbor(r io.Reader) error {
 
 	contextBlock.Type = contextType
 
-	length, err := cboring.ReadMapPairLength(r)
+	context, err := cboring.ReadByteString(r)
 	if err != nil {
 		return err
-	}
-
-	context := make(map[string]string, length)
-	var i uint64
-	for i = 0; i < length; i++ {
-		key, err := cboring.ReadTextString(r)
-		if err != nil {
-			return err
-		}
-
-		value, err := cboring.ReadTextString(r)
-		if err != nil {
-			return err
-		}
-
-		context[key] = value
 	}
 
 	contextBlock.Context = context
 
 	return nil
 }
+
+func (bldr *BundleBuilder) ContextBlock(args ...interface{}) *BundleBuilder {
+	log.WithField("args", args).Debug("Builder args")
+
+	if bldr.err != nil {
+		return bldr
+	}
+
+	context, ok := args[0].(map[string]interface{})
+	if !ok {
+		bldr.err = fmt.Errorf("did not supply valid context data")
+		return bldr
+	}
+
+	contextBlock, err := NewBundleContextBlock(context)
+	if err != nil {
+		bldr.err = err
+		return bldr
+	}
+
+	return bldr.Canonical(contextBlock, DeleteBundle)
+}
+

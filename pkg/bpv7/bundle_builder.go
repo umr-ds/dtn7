@@ -10,8 +10,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // BundleBuilder is a simple framework to create bundles by method chaining.
@@ -434,33 +432,6 @@ func (bldr *BundleBuilder) PreviousNodeBlock(args ...interface{}) *BundleBuilder
 	flags := bldr.canonicalParseFlags(args) | ReplicateBlock
 
 	return bldr.Canonical(NewPreviousNodeBlock(eid), flags)
-}
-
-func (bldr *BundleBuilder) ContextBlock(args ...interface{}) *BundleBuilder {
-	if bldr.err != nil {
-		return bldr
-	}
-
-	c, ok := args[0].(map[string]interface{})
-	if !ok {
-		bldr.err = fmt.Errorf("did not supply valid context data")
-	}
-
-	// I don't know how to do this any better... conversion don't work either...
-	// TODO: find a better way to do this
-	context := make(map[string]string)
-	for k, v := range c {
-		sv, ok := v.(string)
-		if !ok {
-			log.WithFields(log.Fields{
-				"value": v,
-			}).Warn("Value is not a string")
-			bldr.err = fmt.Errorf("did not supply valid context data")
-		}
-		context[k] = sv
-	}
-
-	return bldr.Canonical(append([]interface{}{NewBundleContextBlock(context)}, args[1:]...)...)
 }
 
 // AdministrativeRecord configures an AdministrativeRecord as the Payload. Furthermore, the AdministrativeRecordPayload
