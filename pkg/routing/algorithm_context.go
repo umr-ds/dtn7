@@ -501,6 +501,15 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 		}
 	}
 
+	validPeers, _ := filterCLAs(bi, contextRouting.c.claManager.Sender(), "context")
+	if len(validPeers) == 0 {
+		contextRouting.Debug(log.Fields{
+			"bundle": bp.ID(),
+		}, "All peers already received bundle")
+		return validPeers, false
+	}
+	peers := senderNames(validPeers)
+
 	contextRouting.Debug(log.Fields{
 		"bundle": bndl.ID(),
 	}, "Initialising Javascript VM")
@@ -556,32 +565,21 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 	vm.Set("destination", destination)
 
 	contextRouting.RLock("SenderForBundle", bp.Id, logSemaphores)
-	context := contextRouting.context
-	peerContext := contextRouting.peerContext
-	contextRouting.RUnlock("SenderForBundle", bp.Id, logSemaphores)
-
-	validPeers, _ := filterCLAs(bi, contextRouting.c.claManager.Sender(), "context")
-	if len(validPeers) == 0 {
-		contextRouting.Debug(log.Fields{
-			"bundle": bp.ID(),
-		}, "All peers already received bundle")
-		return validPeers, false
-	}
-	peers := senderNames(validPeers)
-
-	vm.Set("context", context)
-	vm.Set("peerContext", peerContext)
+	vm.Set("context", contextRouting.context)
+	vm.Set("peerContext", contextRouting.peerContext)
 	vm.Set("peers", peers)
 	contextRouting.Debug(log.Fields{
 		"bundle": bp.ID(),
 	}, "Finished VM initialisation")
 	result, err := vm.RunProgram(contextRouting.javascript)
+	contextRouting.RUnlock("SenderForBundle", bp.Id, logSemaphores)
+
 	if err != nil {
 		contextRouting.Warn(log.Fields{
 			"bundle": bp.ID(),
 			"error":  err,
-			"own_context": context,
-			"peerContext": peerContext,
+			"own_context": contextRouting.context,
+			"peerContext": contextRouting.peerContext,
 			"bundleContext": bundleContext,
 		}, "Error executing javascript")
 		return
@@ -601,13 +599,15 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 		"senders": selected,
 	}, "Javascript returned selection of senders")
 
-	selectedSenders := contextRouting.getSendersWithMatchingIDs(contextRouting.c.claManager.Sender(), selected)
+	selectedSenders := contextRouting.getSendersWithMatchingIDs(validPeers, selected)
 
 	contextRouting.Debug(log.Fields{
 		"bundle": bp.ID(),
 		"CLAs":   selectedSenders,
 	}, "ContextRouting selected senders.")
 
+	// update sentEIDs, so that it includes all peers who have previously received the bundle
+	// as well as the people we wil lsend it to
 	filtered, sentEIDs := filterCLAs(bi, selectedSenders, "context")
 
 	if len(filtered) == 0 {

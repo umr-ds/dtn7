@@ -75,6 +75,12 @@ func (client *MTCPClient) Start() (err error, retry bool) {
 }
 
 func (client *MTCPClient) handler() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.WithField("error", r).Error("Panic in MTCPClient handler")
+		}
+	}()
+
 	var ticker = time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -117,9 +123,11 @@ func (client *MTCPClient) Send(bndl bpv7.Bundle) (err error) {
 		}
 
 		// In case of an error, report our failure upstream
+		/*
 		if err != nil {
 			client.reportChan <- cla.NewConvergencePeerDisappeared(client, client.GetPeerEndpointID())
 		}
+		 */
 	}()
 
 	client.mutex.Lock()
@@ -130,27 +138,32 @@ func (client *MTCPClient) Send(bndl bpv7.Bundle) (err error) {
 	buff := new(bytes.Buffer)
 	if cborErr := cboring.Marshal(&bndl, buff); cborErr != nil {
 		err = cborErr
+		client.reportChan <- cla.NewConvergencePeerDisappeared(client, client.GetPeerEndpointID())
 		return
 	}
 
 	if bsErr := cboring.WriteByteStringLen(uint64(buff.Len()), connWriter); bsErr != nil {
 		err = bsErr
+		client.reportChan <- cla.NewConvergencePeerDisappeared(client, client.GetPeerEndpointID())
 		return
 	}
 
 	if _, plErr := buff.WriteTo(connWriter); plErr != nil {
 		err = plErr
+		client.reportChan <- cla.NewConvergencePeerDisappeared(client, client.GetPeerEndpointID())
 		return
 	}
 
 	if flushErr := connWriter.Flush(); flushErr != nil {
 		err = flushErr
+		client.reportChan <- cla.NewConvergencePeerDisappeared(client, client.GetPeerEndpointID())
 		return
 	}
 
 	// Check if the connection is still alive with an empty, unbuffered packet
 	if probeErr := cboring.WriteByteStringLen(0, client.conn); probeErr != nil {
 		err = probeErr
+		client.reportChan <- cla.NewConvergencePeerDisappeared(client, client.GetPeerEndpointID())
 		return
 	}
 
