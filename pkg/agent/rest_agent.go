@@ -234,6 +234,8 @@ func (ra *RestAgent) handleFetch(w http.ResponseWriter, r *http.Request) {
 
 // handleBuild creates and dispatches a new bundle, called by /build.
 func (ra *RestAgent) handleBuild(w http.ResponseWriter, r *http.Request) {
+	log.Debug("Called handleBuild")
+
 	var (
 		buildRequest  RestBuildRequest
 		buildResponse RestBuildResponse
@@ -273,6 +275,7 @@ func (ra *RestAgent) handleBuild(w http.ResponseWriter, r *http.Request) {
 			"size":   payloadLength,
 		}).Info("REST client sent bundle")
 		ra.sender <- BundleMessage{Bundle: b}
+		log.Debug("Bundle sent to channel")
 	}
 
 	w.Header().Set("Content-Type", "application/json")
