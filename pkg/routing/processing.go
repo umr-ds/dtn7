@@ -7,6 +7,7 @@ package routing
 
 import (
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -257,12 +258,8 @@ func (c *Core) forward(bp BundleDescriptor) {
 		nodes, deleteAfterwards = c.routing.SenderForBundle(bp)
 	}
 
-	var bundleSent = false
-
-	var wg sync.WaitGroup
+	var bundleSent = make(chan struct{})
 	var once sync.Once
-
-	wg.Add(len(nodes))
 
 	for _, node := range nodes {
 		go func(node cla.ConvergenceSender) {
@@ -285,15 +282,20 @@ func (c *Core) forward(bp BundleDescriptor) {
 					"cla":    node,
 				}).Printf("Sending bundle succeeded")
 
-				once.Do(func() { bundleSent = true })
+				once.Do(func() { close(bundleSent) })
 			}
-
-			wg.Done()
 		}(node)
 	}
 
-	log.WithField("bundle", bp.ID()).Debug("Engaging wait group")
-	wg.Wait()
+	sentOnce := false
+	log.WithField("bundle", bp.ID()).Debug("Waiting for successful transmission")
+	select {
+	case <-bundleSent:
+		log.WithField("bundle", bp.ID()).Debug("Transmission successful")
+		sentOnce = true
+	case <-time.After(30 * time.Second):
+		log.WithField("bundle", bp.ID()).Warn("Sending timeout reached")
+	}
 	log.WithField("bundle", bp.ID()).Debug("Wait group terminated")
 
 	if hcBlock, err := bp.MustBundle().ExtensionBlock(bpv7.ExtBlockTypeHopCountBlock); err == nil {
@@ -307,7 +309,7 @@ func (c *Core) forward(bp BundleDescriptor) {
 		}).Debug("Bundle's hop count block was reset")
 	}
 
-	if bundleSent {
+	if sentOnce {
 		if bp.MustBundle().PrimaryBlock.BundleControlFlags.Has(bpv7.StatusRequestForward) {
 			c.SendStatusReport(bp, bpv7.ForwardedBundle, bpv7.NoInformation)
 		}
