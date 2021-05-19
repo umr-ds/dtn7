@@ -308,8 +308,11 @@ func (manager *Manager) Sender() (css []ConvergenceSender) {
 
 // Receiver returns an array of all active ConvergenceReceivers.
 func (manager *Manager) Receiver() (crs []ConvergenceReceiver) {
+	log.Debug("Getting receivers")
 	manager.convs.Range(func(_, convElem interface{}) bool {
 		ce := convElem.(*convergenceElem)
+		log.WithField("receiver", ce.conv.Address()).Debug("Checking receiver")
+
 		if !ce.isActive() {
 			return true
 		}
@@ -319,6 +322,7 @@ func (manager *Manager) Receiver() (crs []ConvergenceReceiver) {
 		}
 		return true
 	})
+	log.Debug("Got receivers")
 	return
 }
 

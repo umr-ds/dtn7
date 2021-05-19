@@ -169,6 +169,7 @@ func (c *Core) handler() {
 				c.checkPendingBundles()
 
 			case cla.PeerDisappeared:
+				log.WithField("peer", cs.Sender.Address()).Debug("CLA has been closed")
 				c.routing.ReportPeerDisappeared(cs.Sender)
 
 			default:
@@ -229,10 +230,16 @@ func (c *Core) HasEndpoint(endpoint bpv7.EndpointID, bid string) bool {
 
 	log.WithField("bundle", bid).Debug("Checking receiver endpoints")
 	for _, cr := range c.claManager.Receiver() {
+		log.WithField("bundle", bid).Debug("Iteration convergenceReceiver")
+		log.WithFields(log.Fields{
+			"bundle": bid,
+			"convergenceReceiver": cr.GetEndpointID(),
+		}).Debug("Checking convergenceReceiver")
 		if cr.GetEndpointID().SameNode(endpoint) {
 			log.WithField("bundle", bid).Debug("Has receiver endpoint")
 			return true
 		}
+		log.WithField("bundle", bid).Debug("Wasn't it")
 	}
 
 	log.WithField("bundle", bid).Debug("Don't have endpoint")

@@ -128,10 +128,11 @@ func (client *MTCPClient) Send(bndl bpv7.Bundle) (err error) {
 			client.reportChan <- cla.NewConvergencePeerDisappeared(client, client.GetPeerEndpointID())
 		}
 		 */
+
+		client.mutex.Unlock()
 	}()
 
 	client.mutex.Lock()
-	defer client.mutex.Unlock()
 
 	connWriter := bufio.NewWriter(client.conn)
 
