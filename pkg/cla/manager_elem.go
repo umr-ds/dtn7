@@ -156,7 +156,8 @@ func (ce *convergenceElem) deactivate(ttl int) {
 	}).Info("Deactivating CLA")
 
 	close(ce.stopSyn)
-	<-ce.stopAck
+
+	//<-ce.stopAck
 
 	ce.ttl = ttl
 }

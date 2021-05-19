@@ -169,6 +169,7 @@ func (c *Core) handler() {
 				c.checkPendingBundles()
 
 			case cla.PeerDisappeared:
+				log.WithField("peer", cs.Sender.Address()).Debug("CLA has been closed")
 				c.routing.ReportPeerDisappeared(cs.Sender)
 
 			default:

@@ -190,11 +190,11 @@ func (manager *Manager) registerConvergence(conv Convergence) {
 		ce = convElem.(*convergenceElem)
 		if ce.isActive() {
 			/*
-			log.WithFields(log.Fields{
-				"cla":     conv,
-				"address": conv.Address(),
-			}).Debug("CLA registration failed, because this address does already exists")
-			 */
+				log.WithFields(log.Fields{
+					"cla":     conv,
+					"address": conv.Address(),
+				}).Debug("CLA registration failed, because this address does already exists")
+			*/
 
 			return
 		}
@@ -310,6 +310,7 @@ func (manager *Manager) Sender() (css []ConvergenceSender) {
 func (manager *Manager) Receiver() (crs []ConvergenceReceiver) {
 	manager.convs.Range(func(_, convElem interface{}) bool {
 		ce := convElem.(*convergenceElem)
+
 		if !ce.isActive() {
 			return true
 		}
