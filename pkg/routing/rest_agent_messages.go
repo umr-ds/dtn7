@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package agent
+package routing
 
 import "github.com/dtn7/dtn7-go/pkg/bpv7"
 

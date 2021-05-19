@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package agent
+package routing
 
 import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"github.com/dtn7/dtn7-go/pkg/agent"
 	"net/http"
 	"sync"
 
@@ -71,10 +72,11 @@ import (
 //   // <- {"error":""}
 //
 type RestAgent struct {
+	core *Core
 	router *mux.Router
 
-	receiver chan Message
-	sender   chan Message
+	receiver chan agent.Message
+	sender   chan agent.Message
 
 	// map UUIDs to EIDs and received bundles
 	clients sync.Map // uuid[string] -> bpv7.EndpointID
@@ -82,12 +84,13 @@ type RestAgent struct {
 }
 
 // NewRestAgent creates a new RESTful Application Agent.
-func NewRestAgent(router *mux.Router) (ra *RestAgent) {
+func NewRestAgent(router *mux.Router, core *Core) (ra *RestAgent) {
 	ra = &RestAgent{
 		router: router,
+		core: core,
 
-		receiver: make(chan Message),
-		sender:   make(chan Message),
+		receiver: make(chan agent.Message),
+		sender:   make(chan agent.Message),
 	}
 
 	ra.router.HandleFunc("/register", ra.handleRegister).Methods(http.MethodPost)
@@ -106,10 +109,10 @@ func (ra *RestAgent) handler() {
 
 	for msg := range ra.receiver {
 		switch msg := msg.(type) {
-		case BundleMessage:
+		case agent.BundleMessage:
 			ra.receiveBundleMessage(msg)
 
-		case ShutdownMessage:
+		case agent.ShutdownMessage:
 			log.Debug("REST Agent is shutting down")
 			return
 
@@ -120,10 +123,10 @@ func (ra *RestAgent) handler() {
 }
 
 // receiveBundleMessage checks incoming BundleMessages and puts them inbox.
-func (ra *RestAgent) receiveBundleMessage(msg BundleMessage) {
+func (ra *RestAgent) receiveBundleMessage(msg agent.BundleMessage) {
 	var uuids []string
 	ra.clients.Range(func(k, v interface{}) bool {
-		if bagHasEndpoint(msg.Recipients(), v.(bpv7.EndpointID)) {
+		if agent.BagHasEndpoint(msg.Recipients(), v.(bpv7.EndpointID)) {
 			uuids = append(uuids, k.(string))
 		}
 		return false // multiple clients might be registered for some endpoint
@@ -274,8 +277,10 @@ func (ra *RestAgent) handleBuild(w http.ResponseWriter, r *http.Request) {
 			"bundle": b.ID().String(),
 			"size":   payloadLength,
 		}).Info("REST client sent bundle")
-		ra.sender <- BundleMessage{Bundle: b}
-		log.Debug("Bundle sent to channel")
+		//ra.sender <- BundleMessage{Bundle: b}
+		//log.Debug("Bundle sent to channel")
+		ra.core.SendBundle(&b)
+		log.Debug("Bundle sent to core")
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -292,10 +297,10 @@ func (ra *RestAgent) Endpoints() (eids []bpv7.EndpointID) {
 	return
 }
 
-func (ra *RestAgent) MessageReceiver() chan Message {
+func (ra *RestAgent) MessageReceiver() chan agent.Message {
 	return ra.receiver
 }
 
-func (ra *RestAgent) MessageSender() chan Message {
+func (ra *RestAgent) MessageSender() chan agent.Message {
 	return ra.sender
 }

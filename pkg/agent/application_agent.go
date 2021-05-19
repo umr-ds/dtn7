@@ -39,8 +39,8 @@ func bagContainsEndpoint(bag []bpv7.EndpointID, eids []bpv7.EndpointID) bool {
 	return false
 }
 
-// bagHasEndpoint checks if some bag/array/slice of endpoints contains another endpoint.
-func bagHasEndpoint(bag []bpv7.EndpointID, eid bpv7.EndpointID) bool {
+// BagHasEndpoint checks if some bag/array/slice of endpoints contains another endpoint.
+func BagHasEndpoint(bag []bpv7.EndpointID, eid bpv7.EndpointID) bool {
 	return bagContainsEndpoint(bag, []bpv7.EndpointID{eid})
 }
 

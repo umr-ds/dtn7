@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package agent
+package routing
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/dtn7/dtn7-go/pkg/agent"
 	"net/http"
 	"reflect"
 	"strings"
@@ -26,7 +27,7 @@ func TestRestAgentCycle(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 
 	// Start REST server
-	addr := fmt.Sprintf("localhost:%d", randomPort(t))
+	addr := fmt.Sprintf("localhost:%d", agent.randomPort(t))
 
 	r := mux.NewRouter()
 	restRouter := r.PathPrefix("/rest").Subrouter()
@@ -39,7 +40,7 @@ func TestRestAgentCycle(t *testing.T) {
 	restAgent := NewRestAgent(restRouter)
 
 	for i := 1; i <= 3; i++ {
-		if isAddrReachable(addr) {
+		if agent.isAddrReachable(addr) {
 			break
 		} else if i == 3 {
 			t.Fatal("RestAgent seems to be unreachable")
@@ -68,13 +69,13 @@ func TestRestAgentCycle(t *testing.T) {
 	time.Sleep(250 * time.Millisecond)
 
 	// Check registration
-	if !AppAgentHasEndpoint(restAgent, registerEid) {
+	if !agent.AppAgentHasEndpoint(restAgent, registerEid) {
 		t.Fatal("endpoint was not registered")
 	}
 
 	// Send bundle to client
-	b := createBundle("dtn://sender/", registerEid.String(), t)
-	restAgent.MessageReceiver() <- BundleMessage{Bundle: b}
+	b := agent.createBundle("dtn://sender/", registerEid.String(), t)
+	restAgent.MessageReceiver() <- agent.BundleMessage{Bundle: b}
 
 	time.Sleep(250 * time.Millisecond)
 
@@ -162,7 +163,7 @@ func TestRestAgentCycle(t *testing.T) {
 
 		select {
 		case msg := <-restAgent.MessageSender():
-			if bMsg, ok := msg.(BundleMessage); ok {
+			if bMsg, ok := msg.(agent.BundleMessage); ok {
 				buildResponseBundle = bMsg.Bundle
 			}
 			return
@@ -204,7 +205,7 @@ func TestRestAgentCycle(t *testing.T) {
 		t.Fatalf("unregistration errored: %s", unregisterResponse.Error)
 	}
 
-	if AppAgentHasEndpoint(restAgent, registerEid) {
+	if agent.AppAgentHasEndpoint(restAgent, registerEid) {
 		t.Fatal("endpoint is still registered")
 	}
 }

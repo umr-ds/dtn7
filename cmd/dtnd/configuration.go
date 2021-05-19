@@ -197,7 +197,7 @@ func parsePeer(conv convergenceConf, nodeId bpv7.EndpointID) (cla.ConvergenceSen
 }
 
 // parseAgents for the ApplicationAgents.
-func parseAgents(conf agentsConfig) (agents []agent.ApplicationAgent, err error) {
+func parseAgents(conf agentsConfig, core *routing.Core) (agents []agent.ApplicationAgent, err error) {
 	if conf.Ping != "" {
 		if pingEid, pingEidErr := bpv7.NewEndpointID(conf.Ping); pingEidErr != nil {
 			err = pingEidErr
@@ -224,7 +224,7 @@ func parseAgents(conf agentsConfig) (agents []agent.ApplicationAgent, err error)
 
 		if conf.Webserver.Rest {
 			restRouter := r.PathPrefix("/rest").Subrouter()
-			ra := agent.NewRestAgent(restRouter)
+			ra := routing.NewRestAgent(restRouter, core)
 
 			agents = append(agents, ra)
 		}
@@ -318,7 +318,7 @@ func parseCore(filename string) (c *routing.Core, ds *discovery.Manager, err err
 
 	// Agents
 	if conf.Agents != (agentsConfig{}) {
-		if appAgents, appErr := parseAgents(conf.Agents); appErr != nil {
+		if appAgents, appErr := parseAgents(conf.Agents, c); appErr != nil {
 			err = appErr
 			return
 		} else {
