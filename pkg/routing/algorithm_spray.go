@@ -84,7 +84,7 @@ func (sw *SprayAndWait) GarbageCollect() {
 // In this case, we simply check if we originated this bundle and set Multiplicity if we did
 // If we are not the originator, we don't further distribute the bundle
 func (sw *SprayAndWait) NotifyNewBundle(bp BundleDescriptor) {
-	if sw.c.HasEndpoint(bp.MustBundle().PrimaryBlock.SourceNode) {
+	if sw.c.HasEndpoint(bp.MustBundle().PrimaryBlock.SourceNode, bp.ID()) {
 		metadata := sprayMetaData{
 			sent:            make([]bpv7.EndpointID, 0),
 			remainingCopies: sw.l,

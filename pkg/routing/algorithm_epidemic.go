@@ -142,7 +142,7 @@ func (er *EpidemicRouting) DispatchingAllowed(bp BundleDescriptor) bool {
 		return true
 	} else if dst, ok := bi.Properties["routing/epidemic/destination"]; ok {
 		log.WithField("bundle", bp.ID()).Debug("Got destination")
-		if er.c.HasEndpoint(dst.(bpv7.EndpointID)) {
+		if er.c.HasEndpoint(dst.(bpv7.EndpointID), bp.ID()) {
 			log.WithField("bundle", bp.ID()).Debug("Bundle is for us")
 			return true
 		}

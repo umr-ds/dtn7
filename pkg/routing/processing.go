@@ -59,7 +59,7 @@ func (c *Core) transmit(bp BundleDescriptor) {
 	_ = bp.Sync()
 
 	src := bp.MustBundle().PrimaryBlock.SourceNode
-	if src != bpv7.DtnNone() && !c.HasEndpoint(src) {
+	if src != bpv7.DtnNone() && !c.HasEndpoint(src, bp.ID()) {
 		log.WithFields(log.Fields{
 			"bundle": bp.ID(),
 			"source": src,
@@ -174,7 +174,7 @@ func (c *Core) dispatching(bp BundleDescriptor) {
 		return
 	}
 
-	if c.HasEndpoint(bndl.PrimaryBlock.Destination) {
+	if c.HasEndpoint(bndl.PrimaryBlock.Destination, bp.ID()) {
 		c.localDelivery(bp)
 	} else {
 		c.forward(bp)
@@ -293,7 +293,7 @@ func (c *Core) forward(bp BundleDescriptor) {
 	case <-bundleSent:
 		log.WithField("bundle", bp.ID()).Debug("Transmission successful")
 		sentOnce = true
-	case <-time.After(30 * time.Second):
+	case <-time.After(20 * time.Second):
 		log.WithField("bundle", bp.ID()).Warn("Sending timeout reached")
 	}
 	log.WithField("bundle", bp.ID()).Debug("Wait group terminated")

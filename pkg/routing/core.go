@@ -208,25 +208,34 @@ func (c *Core) senderForDestination(endpoint bpv7.EndpointID) (css []cla.Converg
 
 // HasEndpoint checks if the given endpoint ID is assigned either to an
 // application or a CLA governed by this Application Agent.
-func (c *Core) HasEndpoint(endpoint bpv7.EndpointID) bool {
+func (c *Core) HasEndpoint(endpoint bpv7.EndpointID, bid string) bool {
+	log.WithField("bundle", bid).Debug("Checking Own endpoints")
 	if c.NodeId.SameNode(endpoint) {
+		log.WithField("bundle", bid).Debug("Have own endpoint")
 		return true
 	}
 
+	log.WithField("bundle", bid).Debug("Checking Agent endpoints")
 	if c.agentManager.HasEndpoint(endpoint) {
+		log.WithField("bundle", bid).Debug("Has agent endpoint")
 		return true
 	}
 
+	log.WithField("bundle", bid).Debug("Checking CLA endpoints")
 	if c.claManager.HasEndpoint(endpoint) {
+		log.WithField("bundle", bid).Debug("Has CLA endpoint")
 		return true
 	}
 
+	log.WithField("bundle", bid).Debug("Checking receiver endpoints")
 	for _, cr := range c.claManager.Receiver() {
 		if cr.GetEndpointID().SameNode(endpoint) {
+			log.WithField("bundle", bid).Debug("Has receiver endpoint")
 			return true
 		}
 	}
 
+	log.WithField("bundle", bid).Debug("Don't have endpoint")
 	return false
 }
 
@@ -240,7 +249,7 @@ func (c *Core) SendStatusReport(descriptor BundleDescriptor, status bpv7.StatusI
 	}
 
 	// Don't respond to ourself
-	if c.HasEndpoint(bndl.PrimaryBlock.ReportTo) {
+	if c.HasEndpoint(bndl.PrimaryBlock.ReportTo, descriptor.ID()) {
 		return
 	}
 
@@ -266,7 +275,7 @@ func (c *Core) SendStatusReport(descriptor BundleDescriptor, status bpv7.StatusI
 		aaEndpoint = c.NodeId
 	}
 
-	if !c.HasEndpoint(aaEndpoint) && aaEndpoint != c.NodeId {
+	if !c.HasEndpoint(aaEndpoint, descriptor.ID()) && aaEndpoint != c.NodeId {
 		log.WithFields(log.Fields{
 			"bundle":   descriptor.ID(),
 			"endpoint": aaEndpoint,
