@@ -292,7 +292,9 @@ func (c *Core) forward(bp BundleDescriptor) {
 		}(node)
 	}
 
+	log.WithField("bundle", bp.ID()).Debug("Engaging wait group")
 	wg.Wait()
+	log.WithField("bundle", bp.ID()).Debug("Wait group terminated")
 
 	if hcBlock, err := bp.MustBundle().ExtensionBlock(bpv7.ExtBlockTypeHopCountBlock); err == nil {
 		hc := hcBlock.Value.(*bpv7.HopCountBlock)

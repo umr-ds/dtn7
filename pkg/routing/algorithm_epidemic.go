@@ -130,7 +130,9 @@ func (er *EpidemicRouting) clasForBundle(bp BundleDescriptor, updateDb bool) (cs
 // DispatchingAllowed only allows dispatching, iff the bundle is addressed to
 // this Node or if any known CLA without having received this bundle exists.
 func (er *EpidemicRouting) DispatchingAllowed(bp BundleDescriptor) bool {
+	log.WithField("bundle", bp.ID()).Debug("Querying store")
 	bi, biErr := er.c.store.QueryId(bp.Id)
+	log.WithField("bundle", bp.ID()).Debug("Queried store")
 	if biErr != nil {
 		log.WithFields(log.Fields{
 			"bundle": bp.ID(),
@@ -139,20 +141,26 @@ func (er *EpidemicRouting) DispatchingAllowed(bp BundleDescriptor) bool {
 
 		return true
 	} else if dst, ok := bi.Properties["routing/epidemic/destination"]; ok {
+		log.WithField("bundle", bp.ID()).Debug("Got destination")
 		if er.c.HasEndpoint(dst.(bpv7.EndpointID)) {
+			log.WithField("bundle", bp.ID()).Debug("Bundle is for us")
 			return true
 		}
 	}
 
+	log.WithField("bundle", bp.ID()).Debug("Computing CLAs for bundle")
 	css, _ := er.clasForBundle(bp, false)
+	log.WithField("bundle", bp.ID()).Debug("CLAs computed")
 
 	if len(css) == 0 {
+		log.WithField("bundle", bp.ID()).Debug("List of CLAs empty")
 		bi.Pending = true
 		if err := er.c.store.Update(bi); err != nil {
 			log.WithFields(log.Fields{
 				"error": err,
 			}).Warn("Updating BundleItem failed")
 		}
+		log.WithField("bundle", bp.ID()).Debug("Updated store")
 	}
 
 	return len(css) > 0
