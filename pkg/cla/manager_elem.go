@@ -44,6 +44,7 @@ func newConvergenceElement(conv Convergence, convChnl chan ConvergenceStatus, tt
 // asReceiver returns a ConvergenceReceiver, if one is available, as indicated
 // by the boolean return value.
 func (ce *convergenceElem) asReceiver() (c ConvergenceReceiver, ok bool) {
+	log.WithField("Receiver", ce.conv.Address()).Debug("asReceiver")
 	c, ok = (ce.conv).(ConvergenceReceiver)
 	return
 }
@@ -55,9 +56,11 @@ func (ce *convergenceElem) asSender() (c ConvergenceSender, ok bool) {
 	return
 }
 
-// isActive return if this convergenceElem is wraped around an active Convergence.
+// isActive return if this convergenceElem is wrapped around an active Convergence.
 func (ce *convergenceElem) isActive() bool {
+	log.WithField("receiver", ce.conv.Address()).Debug("Entering isActive Mutex")
 	ce.mutex.Lock()
+	log.WithField("receiver", ce.conv.Address()).Debug("Passed isActive Mutex")
 	defer ce.mutex.Unlock()
 
 	return ce.ttl < 0

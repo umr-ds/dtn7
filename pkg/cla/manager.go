@@ -82,6 +82,7 @@ func (manager *Manager) handler() {
 	defer activateTicker.Stop()
 
 	for {
+		log.Debug("Another round in manager-land")
 		select {
 		case <-manager.stopSyn:
 			log.Debug("CLA Manager received closing signal")
@@ -314,8 +315,10 @@ func (manager *Manager) Receiver() (crs []ConvergenceReceiver) {
 		log.WithField("receiver", ce.conv.Address()).Debug("Checking receiver")
 
 		if !ce.isActive() {
+			log.WithField("receiver", ce.conv.Address()).Debug("Receiver was not active")
 			return true
 		}
+		log.WithField("receiver", ce.conv.Address()).Debug("Receiver was active")
 
 		if cr, ok := ce.asReceiver(); ok {
 			crs = append(crs, cr)
