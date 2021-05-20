@@ -58,13 +58,14 @@ func (ce *convergenceElem) asSender() (c ConvergenceSender, ok bool) {
 
 // isActive return if this convergenceElem is wrapped around an active Convergence.
 func (ce *convergenceElem) isActive() bool {
-	log.WithField("receiver", ce.conv.Address()).Debug("Entering isActive Mutex")
+	//log.WithField("receiver", ce.conv.Address()).Debug("Entering isActive Mutex")
 	ce.mutex.Lock()
 	defer func() {
 		ce.mutex.Unlock()
-		log.WithField("receiver", ce.conv.Address()).Debug("Leaving isActive Mutex")
+		//log.WithField("receiver", ce.conv.Address()).Debug("Leaving isActive Mutex")
 	}()
 
+	log.WithField("receiver", ce.conv.Address()).Debug("Checking activity")
 	return ce.ttl < 0
 }
 
@@ -77,18 +78,17 @@ func (ce *convergenceElem) handler() {
 				"cla": ce.conv,
 			}).Debug("Closing CLA's handler")
 
-			if err := ce.conv.Close(); err != nil {
-				log.WithField("cla", ce.conv).WithError(err).Warn("Closing CLA errored")
-			}
-
 			log.WithFields(log.Fields{
 				"cla": ce.conv,
 			}).Debug("Sending stopAck")
 			close(ce.stopAck)
-
 			log.WithFields(log.Fields{
 				"cla": ce.conv,
 			}).Debug("Sent stopAck")
+
+			if err := ce.conv.Close(); err != nil {
+				log.WithField("cla", ce.conv).WithError(err).Warn("Closing CLA errored")
+			}
 
 			return
 

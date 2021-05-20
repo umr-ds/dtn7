@@ -217,11 +217,12 @@ func (manager *Manager) registerConvergence(conv Convergence) {
 		}
 	}
 
-	if successful, retry := ce.activate(); !successful && !retry {
+	if successful, _ := ce.activate(); !successful {
 		log.WithFields(log.Fields{
 			"cla":     conv,
 			"address": conv.Address(),
-		}).Warn("Startup of CLA  failed, a retry should not be made")
+		}).Warn("Startup of CLA  failed")
+		ce.deactivate(0)
 	} else {
 		manager.convs.Store(conv.Address(), ce)
 	}
@@ -269,7 +270,7 @@ func (manager *Manager) unregisterConvergence(conv Convergence) {
 		return
 	}
 
-	convElem.(*convergenceElem).deactivate(manager.queueTtl)
+	convElem.(*convergenceElem).deactivate(0)
 	manager.convs.Delete(conv.Address())
 }
 
