@@ -7,6 +7,11 @@ package main
 import (
 	"os"
 	"os/signal"
+	"net/http"
+
+	"runtime"
+
+	_ "net/http/pprof"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -20,6 +25,12 @@ func waitSigint() {
 }
 
 func main() {
+	runtime.SetBlockProfileRate(1)
+	runtime.SetMutexProfileFraction(1)
+	go func() {
+		log.Println(http.ListenAndServe("localhost:9999", nil))
+	}()
+
 	if len(os.Args) != 2 {
 		log.Fatalf("Usage: %s configuration.toml", os.Args[0])
 	}

@@ -115,10 +115,10 @@ func (manager *Manager) handler() {
 				log.WithFields(log.Fields{
 					"cla":      cs.Sender,
 					"endpoint": cs.Message.(bpv7.EndpointID),
-				}).Info("CLA Manager received Peer Disappeared, restarting CLA")
+				}).Info("CLA Manager received Peer Disappeared, terminating CLA")
 
-				manager.Restart(cs.Sender)
 				manager.outChnl <- cs
+				manager.Unregister(cs.Sender)
 
 			default:
 				manager.outChnl <- cs
@@ -191,11 +191,11 @@ func (manager *Manager) registerConvergence(conv Convergence) {
 		ce = convElem.(*convergenceElem)
 		if ce.isActive() {
 			/*
-			log.WithFields(log.Fields{
-				"cla":     conv,
-				"address": conv.Address(),
-			}).Debug("CLA registration failed, because this address does already exists")
-			 */
+				log.WithFields(log.Fields{
+					"cla":     conv,
+					"address": conv.Address(),
+				}).Debug("CLA registration failed, because this address does already exists")
+			*/
 
 			return
 		}

@@ -60,8 +60,10 @@ func (ce *convergenceElem) asSender() (c ConvergenceSender, ok bool) {
 func (ce *convergenceElem) isActive() bool {
 	log.WithField("receiver", ce.conv.Address()).Debug("Entering isActive Mutex")
 	ce.mutex.Lock()
-	log.WithField("receiver", ce.conv.Address()).Debug("Passed isActive Mutex")
-	defer ce.mutex.Unlock()
+	defer func() {
+		ce.mutex.Unlock()
+		log.WithField("receiver", ce.conv.Address()).Debug("Leaving isActive Mutex")
+	}()
 
 	return ce.ttl < 0
 }
@@ -78,7 +80,15 @@ func (ce *convergenceElem) handler() {
 			if err := ce.conv.Close(); err != nil {
 				log.WithField("cla", ce.conv).WithError(err).Warn("Closing CLA errored")
 			}
+
+			log.WithFields(log.Fields{
+				"cla": ce.conv,
+			}).Debug("Sending stopAck")
 			close(ce.stopAck)
+
+			log.WithFields(log.Fields{
+				"cla": ce.conv,
+			}).Debug("Sent stopAck")
 
 			return
 
@@ -100,8 +110,12 @@ func (ce *convergenceElem) activate() (successful, retry bool) {
 		return
 	}
 
+	log.WithField("receiver", ce.conv.Address()).Debug("Entering activate Mutex")
 	ce.mutex.Lock()
-	defer ce.mutex.Unlock()
+	defer func() {
+		ce.mutex.Unlock()
+		log.WithField("receiver", ce.conv.Address()).Debug("Leaving activate Mutex")
+	}()
 
 	if ce.ttl == 0 && !ce.conv.IsPermanent() {
 		log.WithFields(log.Fields{
@@ -151,15 +165,27 @@ func (ce *convergenceElem) deactivate(ttl int) {
 		return
 	}
 
+	log.WithField("receiver", ce.conv.Address()).Debug("Entering deactivate Mutex")
 	ce.mutex.Lock()
-	defer ce.mutex.Unlock()
+	defer func() {
+		ce.mutex.Unlock()
+		log.WithField("receiver", ce.conv.Address()).Debug("Leaving deactivate Mutex")
+	}()
 
 	log.WithFields(log.Fields{
 		"cla": ce.conv,
 	}).Info("Deactivating CLA")
 
 	close(ce.stopSyn)
+
+	log.WithFields(log.Fields{
+		"cla": ce.conv,
+	}).Info("Waiting for stopAck")
 	<-ce.stopAck
+
+	log.WithFields(log.Fields{
+		"cla": ce.conv,
+	}).Info("Got stopAck")
 
 	ce.ttl = ttl
 }

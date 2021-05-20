@@ -232,7 +232,7 @@ func (c *Core) HasEndpoint(endpoint bpv7.EndpointID, bid string) bool {
 	for _, cr := range c.claManager.Receiver() {
 		log.WithField("bundle", bid).Debug("Iteration convergenceReceiver")
 		log.WithFields(log.Fields{
-			"bundle": bid,
+			"bundle":              bid,
 			"convergenceReceiver": cr.GetEndpointID(),
 		}).Debug("Checking convergenceReceiver")
 		if cr.GetEndpointID().SameNode(endpoint) {

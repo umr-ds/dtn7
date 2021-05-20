@@ -61,8 +61,11 @@ func (serv *MTCPServer) Start() (error, bool) {
 		for {
 			select {
 			case <-serv.stopSyn:
+				log.Debug("Closing server listener")
 				_ = ln.Close()
+				log.Debug("Closing server report channel")
 				close(serv.reportChan)
+				log.Debug("Closeing server stopAck channel")
 				close(serv.stopAck)
 
 				return
@@ -148,8 +151,12 @@ func (serv *MTCPServer) Channel() chan cla.ConvergenceStatus {
 }
 
 func (serv *MTCPServer) Close() error {
+	log.Debug("Closing server stop syn channel")
 	close(serv.stopSyn)
+	log.Debug("Waiting for server stopAck channel")
 	<-serv.stopAck
+
+	log.Debug("Server closed.")
 
 	return nil
 }
