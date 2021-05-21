@@ -8,8 +8,6 @@ function vectorAngle(xa, ya, xb, yb) {
 }
 
 function sensorToSensor(peerID) {
-    loggingFunc("sensorToSensor");
-
     var ownDistance = JSON.parse(context["backbone"])["distance"];
     loggingFunc("ownDistance: " + ownDistance)
     var peerDistance = JSON.parse(peerContext[peerID]["backbone"])["distance"];
@@ -25,44 +23,7 @@ function sensorToSensor(peerID) {
     return peerConnectedness > ownConnectedness;
 }
 
-function sensorToBackbone() {
-    loggingFunc("sensorToBackbone");
-    return true;
-}
-
-function sensorToGuest(peerID) {
-    loggingFunc("sensorToGuest");
-    return true;
-}
-
-function backboneToSensor() {
-    loggingFunc("backboneToSensor");
-    return false;
-}
-
-function backboneToBackbone() {
-    loggingFunc("backboneToBackbone");
-    return false;
-}
-
-function backboneToGuest() {
-    loggingFunc("backboneToGuest");
-    return false;
-}
-
-function guestToSensor() {
-    loggingFunc("guestToSensor");
-    return false;
-}
-
-function guestToBackbone() {
-    loggingFunc("guestToBackbone");
-    return true;
-}
-
 function guestToGuest(peerID) {
-    loggingFunc("guestToGuest");
-
     var ownVector = JSON.parse(context["movement"]);
     var peerVector = JSON.parse(peerContext[peerID]["movement"]);
 
@@ -81,12 +42,12 @@ var senders = [];
 
 len = peers.length;
 for (var i = 0; i < len; i++) {
-    var peer = peers[i];
-    loggingFunc("Peer: " + peer);
+    var currentPeer = peers[i];
+    loggingFunc("Peer: " + currentPeer);
 
-    var thisPeer = peerContext[peer];
-    loggingFunc("Peer Context: " + JSON.stringify(thisPeer));
-    if (thisPeer === undefined) {
+    var currentPeerContext = peerContext[currentPeer];
+    loggingFunc("Peer Context: " + JSON.stringify(currentPeerContext));
+    if (currentPeerContext === undefined) {
         continue;
     }
 
@@ -95,7 +56,7 @@ for (var i = 0; i < len; i++) {
     loggingFunc("Own Type: " + ownType);
 
 
-    var peerRole = JSON.parse(thisPeer["role"]);
+    var peerRole = JSON.parse(currentPeerContext["role"]);
     var peerType = peerRole["node_type"];
     loggingFunc("Peer Type: " + peerType);
 
@@ -104,14 +65,17 @@ for (var i = 0; i < len; i++) {
         case "sensor":
             switch (peerType) {
                 case "sensor":
-                    forward = sensorToSensor(peer);
+                    loggingFunc("sensorToSensor");
+                    forward = sensorToSensor(currentPeer);
                     break;
                 case "backbone":
                     // backbones are now sinks, so we always forward
+                    loggingFunc("sensorToSBackbone");
                     forward = true;
                     break;
                 case "visitor":
-                    forward = sensorToGuest(peer);
+                    loggingFunc("sensorToGuest")
+                    forward = true;
                     break;
                 default:
                     loggingFunc("Unknown node type: " + peerRole);
@@ -124,14 +88,17 @@ for (var i = 0; i < len; i++) {
         case "visitor":
             switch (peerType) {
                 case "sensor":
-                    forward = guestToSensor(peer);
+                    loggingFunc("guestToSensor")
+                    forward = false;
                     break;
                 case "backbone":
+                    loggingFunc("guestToBackbone");
                     // backbones are now sinks, so we always forward
                     forward = true;
                     break;
                 case "visitor":
-                    forward = guestToGuest(peer);
+                    loggingFunc("guestToGuest");
+                    forward = guestToGuest(currentPeer);
                     break;
                 default:
                     loggingFunc("Unknown node type: " + peerRole);
@@ -141,10 +108,10 @@ for (var i = 0; i < len; i++) {
             loggingFunc("Unknown node type: " + ownRole);
     }
 
-    loggingFunc("Will forward to peer " + peer + ": " + forward);
+    loggingFunc("Will forward to peer " + currentPeer + ": " + forward);
 
     if (forward) {
-        senders.push(peer);
+        senders.push(currentPeer);
     }
 }
 
