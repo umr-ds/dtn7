@@ -176,6 +176,11 @@ func (client *MTCPClient) Channel() chan cla.ConvergenceStatus {
 }
 
 func (client *MTCPClient) Close() error {
+	defer func() {
+		if r := recover(); r != nil {
+			log.WithField("cla", client.Address()).Error("Tried to close closed channel in Close()")
+		}
+	}()
 	close(client.stopSyn)
 	<-client.stopAck
 
