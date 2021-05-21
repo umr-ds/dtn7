@@ -519,48 +519,51 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 	vm.Set("modifyBundleContext", contextRouting.modifyBundleContext)
 	vm.Set("bundleID", bp.ID())
 
-	bundleContext, ok := bi.Properties["routing/context/context"].(map[string]interface{})
+	bundleContext := make(map[string]interface{})
+	bndlctx, ok := bi.Properties["routing/context/context"].(map[string]interface{})
 	if !ok {
 		contextRouting.Warn(log.Fields{
 			"bundle":  bndl.ID(),
 			"context": bi.Properties["routing/context/context"],
 		}, "No context for bundle")
-		return nil, false
 	} else {
 		contextRouting.Debug(log.Fields{
 			"bundle":  bndl.ID(),
 			"context": bundleContext,
 		}, "Bundle Context")
+		bundleContext = bndlctx
 	}
 	vm.Set("bundleContext", bundleContext)
 
-	source, ok := bi.Properties["routing/context/source"].(string)
+	source := ""
+	src, ok := bi.Properties["routing/context/source"].(string)
 	if !ok {
 		contextRouting.Warn(log.Fields{
 			"bundle": bndl.ID(),
 			"source": bi.Properties["routing/context/source"],
 		}, "Unable to get bundle source")
-		return nil, false
 	} else {
 		contextRouting.Debug(log.Fields{
 			"bundle": bndl.ID(),
 			"source": source,
 		}, "Bundle Source")
+		source = src
 	}
 	vm.Set("source", source)
 
-	destination, ok := bi.Properties["routing/context/destination"].(string)
+	destination := ""
+	dest, ok := bi.Properties["routing/context/destination"].(string)
 	if !ok {
 		contextRouting.Warn(log.Fields{
 			"bundle":      bp.ID(),
 			"destination": bi.Properties["routing/context/destination"],
 		}, "Unable to get bundle destination")
-		return nil, false
 	} else {
 		contextRouting.Debug(log.Fields{
 			"bundle":      bp.ID(),
 			"destination": destination,
 		}, "Bundle Destination")
+		destination = dest
 	}
 	vm.Set("destination", destination)
 
@@ -594,10 +597,18 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 		}, "Could not export javascript return to string array")
 		return
 	}
-	contextRouting.Debug(log.Fields{
-		"bundle":  bp.ID(),
-		"senders": selected,
-	}, "Javascript returned selection of senders")
+
+	if len(selected) == 0 {
+		contextRouting.Debug(log.Fields{
+			"bundle": bp.ID(),
+		}, "Javascript returned empty list")
+		return
+	} else {
+		contextRouting.Debug(log.Fields{
+			"bundle":  bp.ID(),
+			"senders": selected,
+		}, "Javascript returned selection of senders")
+	}
 
 	selectedSenders := contextRouting.getSendersWithMatchingIDs(validPeers, selected)
 
@@ -607,7 +618,7 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 	}, "ContextRouting selected senders.")
 
 	// update sentEIDs, so that it includes all peers who have previously received the bundle
-	// as well as the people we wil lsend it to
+	// as well as the people we will send it to
 	filtered, sentEIDs := filterCLAs(bi, selectedSenders, "context")
 
 	if len(filtered) == 0 {
