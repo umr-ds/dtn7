@@ -355,7 +355,7 @@ func (bs *BinarySpray) SenderForBundle(bp BundleDescriptor) (css []cla.Convergen
 			} else {
 				// if it doesn't, then create one
 				metadataBlock := bpv7.NewBinarySprayBlock(sendCopies)
-				bp.MustBundle().AddExtensionBlock(bpv7.NewCanonicalBlock(0, 0, metadataBlock))
+				_ := bp.MustBundle().AddExtensionBlock(bpv7.NewCanonicalBlock(0, 0, metadataBlock))
 			}
 
 			// we currently only send a bundle to a single peer at once

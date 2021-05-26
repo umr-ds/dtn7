@@ -230,7 +230,10 @@ func TestBundleAddRemoveExtensionBlocks(t *testing.T) {
 	if b.HasExtensionBlock(ExtBlockTypePreviousNodeBlock) {
 		t.Fatalf("previous node block is present")
 	}
-	b.AddExtensionBlock(NewCanonicalBlock(0, 0, NewPreviousNodeBlock(MustNewEndpointID("dtn://prev/"))))
+	err = b.AddExtensionBlock(NewCanonicalBlock(0, 0, NewPreviousNodeBlock(MustNewEndpointID("dtn://prev/"))))
+	if err != nil {
+		t.Fatalf("adding PreviousNodeBlock resulted in error: %v", err)
+	}
 	if !b.HasExtensionBlock(ExtBlockTypePreviousNodeBlock) {
 		t.Fatalf("previous node block is not present")
 	}
