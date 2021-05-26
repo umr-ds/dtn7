@@ -523,12 +523,12 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 	bndlctx, ok := bi.Properties["routing/context/context"].(map[string]interface{})
 	if !ok {
 		contextRouting.Warn(log.Fields{
-			"bundle":  bndl.ID(),
+			"bundle":  bp.ID(),
 			"context": bi.Properties["routing/context/context"],
 		}, "No context for bundle")
 	} else {
 		contextRouting.Debug(log.Fields{
-			"bundle":  bndl.ID(),
+			"bundle":  bp.ID(),
 			"context": bundleContext,
 		}, "Bundle Context")
 		bundleContext = bndlctx
@@ -539,12 +539,12 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 	src, ok := bi.Properties["routing/context/source"].(string)
 	if !ok {
 		contextRouting.Warn(log.Fields{
-			"bundle": bndl.ID(),
+			"bundle": bp.ID(),
 			"source": bi.Properties["routing/context/source"],
 		}, "Unable to get bundle source")
 	} else {
 		contextRouting.Debug(log.Fields{
-			"bundle": bndl.ID(),
+			"bundle": bp.ID(),
 			"source": source,
 		}, "Bundle Source")
 		source = src
@@ -567,7 +567,7 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 	}
 	vm.Set("destination", destination)
 
-	contextRouting.RLock("SenderForBundle", bp.Id, logSemaphores)
+	contextRouting.Lock("SenderForBundle", bp.Id, logSemaphores)
 	vm.Set("context", contextRouting.context)
 	vm.Set("peerContext", contextRouting.peerContext)
 	vm.Set("peers", peers)
@@ -575,7 +575,7 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 		"bundle": bp.ID(),
 	}, "Finished VM initialisation")
 	result, err := vm.RunProgram(contextRouting.javascript)
-	contextRouting.RUnlock("SenderForBundle", bp.Id, logSemaphores)
+	contextRouting.Unlock("SenderForBundle", bp.Id, logSemaphores)
 
 	if err != nil {
 		contextRouting.Warn(log.Fields{
@@ -629,6 +629,7 @@ func (contextRouting *ContextRouting) SenderForBundle(bp BundleDescriptor) (send
 	}
 
 	bi.Properties["routing/context/sent"] = sentEIDs
+	bi.Properties["routing/context/context"] = bundleContext
 	if err := contextRouting.c.store.Update(bi); err != nil {
 		contextRouting.Warn(log.Fields{
 			"bundle": bp.ID(),
@@ -700,7 +701,7 @@ func (contextRouting *ContextRouting) ReportPeerDisappeared(peer cla.Convergence
 // To be passed to the script vm to enable full software defined routing
 func (contextRouting *ContextRouting) modifyBundleContext(bndl *bpv7.Bundle, context map[string]interface{}) {
 	_, err := bndl.ExtensionBlock(bpv7.ExtBlockTypeContextBlock)
-	if err != nil {
+	if err == nil {
 		bndl.RemoveExtensionBlockByBlockNumber(bpv7.ExtBlockTypeContextBlock)
 	}
 
