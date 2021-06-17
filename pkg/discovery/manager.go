@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2020 Markus Sommer
+// SPDX-FileCopyrightText: 2020, 2021 Markus Sommer
 // SPDX-FileCopyrightText: 2020, 2021 Alvar Penning
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -7,6 +7,7 @@ package discovery
 
 import (
 	"fmt"
+	"github.com/dtn7/dtn7-go/pkg/cla/quicl"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -146,6 +147,9 @@ func (manager *Manager) handleDiscovery(announcement Announcement, addr string) 
 
 	case cla.TCPCLv4:
 		convergable = tcpclv4.DialTCP(fmt.Sprintf("%s:%d", addr, announcement.Port), manager.NodeId, false)
+
+	case cla.QUICL:
+		convergable = quicl.NewDialerEndpoint(fmt.Sprintf("%s:%d", addr, announcement.Port), manager.NodeId, false)
 
 	default:
 		log.WithFields(log.Fields{
