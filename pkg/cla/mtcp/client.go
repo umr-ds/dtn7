@@ -1,5 +1,7 @@
-// SPDX-FileCopyrightText: 2019 Markus Sommer
+// SPDX-FileCopyrightText: 2019, 2021 Markus Sommer
 // SPDX-FileCopyrightText: 2019, 2020, 2021 Alvar Penning
+// SPDX-FileCopyrightText: 2021 Artur Sterz
+// SPDX-FileCopyrightText: 2021 Jonas Höchst
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -90,12 +92,10 @@ func (client *MTCPClient) handler() {
 	for {
 		select {
 		case <-client.stopSyn:
-			client.mutex.Lock()
 			_ = client.conn.Close()
 
 			close(client.reportChan)
 			close(client.stopAck)
-			client.mutex.Unlock()
 
 			return
 
@@ -118,16 +118,16 @@ func (client *MTCPClient) handler() {
 
 func (client *MTCPClient) Send(bndl bpv7.Bundle) (err error) {
 	defer func() {
-		if r := recover(); r != nil && err == nil {
+		if r := recover(); r != nil {
 			err = fmt.Errorf("MTCPClient.Send: %v", r)
 		}
+	}()
 
+	defer func() {
 		// In case of an error, report our failure upstream
-		/*
 		if err != nil {
 			client.reportChan <- cla.NewConvergencePeerDisappeared(client, client.GetPeerEndpointID())
 		}
-		 */
 
 		client.mutex.Unlock()
 	}()

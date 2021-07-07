@@ -1,5 +1,7 @@
 // SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
-// SPDX-FileCopyrightText: 2020 Markus Sommer
+// SPDX-FileCopyrightText: 2020, 2021 Markus Sommer
+// SPDX-FileCopyrightText: 2021 Artur Sterz
+// SPDX-FileCopyrightText: 2021 Jonas Höchst
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -20,7 +22,7 @@ import (
 // CLA administration themselves.
 type Manager struct {
 	// queueTtl is the amount of retries for a CLA.
-	queueTtl int
+	queueTtl int32
 
 	// retryTime is the duration between two activation attempts.
 	retryTime time.Duration
@@ -268,7 +270,18 @@ func (manager *Manager) unregisterConvergence(conv Convergence) {
 		return
 	}
 
-	convElem.(*convergenceElem).deactivate(manager.queueTtl)
+	element := convElem.(*convergenceElem)
+
+	if element.conv != conv {
+		log.WithFields(log.Fields{
+			"cla":     conv,
+			"address": conv.Address(),
+		}).Error("CLA not unregistered, different instance.")
+
+		return
+	}
+
+	element.deactivate(manager.queueTtl)
 	manager.convs.Delete(conv.Address())
 }
 
