@@ -287,12 +287,14 @@ func (bs *BinarySpray) NotifyNewBundle(bp BundleDescriptor) {
 			remainingCopies: binarySprayBlock.RemainingCopies(),
 		}
 
+		bndl := bp.MustBundle()
 		// if the bundle has a PreviousNodeBlock, add it to the list of nodes which we know to have the bundle
-		if pnBlock, err := bp.MustBundle().ExtensionBlock(bpv7.ExtBlockTypePreviousNodeBlock); err == nil {
+		if pnBlock, err := bndl.ExtensionBlock(bpv7.ExtBlockTypePreviousNodeBlock); err == nil {
 			prevNode := pnBlock.Value.(*bpv7.PreviousNodeBlock).Endpoint()
 			metadata.sent = append(metadata.sent, prevNode)
 			log.WithFields(log.Fields{
 				"bundle": bp.ID(),
+				"dst": 	  bndl.PrimaryBlock.Destination.String(),
 				"src":    prevNode,
 			}).Info("Received bundle from peer")
 		}
