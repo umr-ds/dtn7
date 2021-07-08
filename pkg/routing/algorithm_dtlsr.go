@@ -207,7 +207,7 @@ func (dtlsr *DTLSR) NotifyNewBundle(bp BundleDescriptor) {
 		prevNode := pnBlock.Value.(*bpv7.PreviousNodeBlock).Endpoint()
 
 		log.WithFields(log.Fields{
-			"bundle": bndl.ID(),
+			"bundle": bp.ID(),
 			"dst": 	  bndl.PrimaryBlock.Destination.String(),
 			"src":    prevNode,
 		}).Info("Received bundle from peer")
