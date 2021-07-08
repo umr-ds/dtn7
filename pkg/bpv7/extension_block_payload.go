@@ -45,7 +45,11 @@ func (pb *PayloadBlock) UnmarshalBinary(data []byte) error {
 //
 // If this type does not implement the json.Marshaler, the CBOR encoding would be returned which might be misleading.
 func (pb *PayloadBlock) MarshalJSON() ([]byte, error) {
-	return json.Marshal(pb.Data())
+	payload := pb.Data()
+	if len(payload) > 100 {
+		payload = payload[:100]
+	}
+	return json.Marshal(payload)
 }
 
 // CheckValid returns an array of errors for incorrect data.
